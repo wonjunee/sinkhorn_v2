@@ -31,13 +31,15 @@ public:
         delete[] ar;
     }
 
-    void save_image_opencv(const double* A, const string& filename, const int iter){
+    void save_image_opencv(const double* A, const string& filename, const int iter, double max_A = -1){
         string filename_iter = "./figures/" + filename;
         filename_iter = filename_iter + "-" + to_string(iter);
         filename_iter = filename_iter + ".png";
 
-        double max_A = 0;
-        for(int i=0;i<n1*n2;++i) max_A = fmax(max_A, A[i]);
+        if(max_A < 0){
+            for(int i=0;i<n1*n2;++i) max_A = fmax(max_A, A[i]);    
+        }
+        
         for(int i=0;i<n1*n2;++i) ar[i] = (unsigned char) (A[i]/max_A * 255);
 
         memcpy(img_in.data, ar, n1*n2*sizeof(unsigned char));

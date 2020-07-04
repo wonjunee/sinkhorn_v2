@@ -169,6 +169,9 @@ public:
     double* vx;
     double* vy;
 
+    double* vxtmp;
+    double* vytmp;
+
     // Initialize phi and psi
     double* phi;
     double* psi;
@@ -196,6 +199,9 @@ public:
         vx=new double[n1*n2];
         vy=new double[n1*n2];
 
+        vxtmp=new double[n1*n2];
+        vytmp=new double[n1*n2];
+
         phi=new double[n1*n2];
         psi=new double[n1*n2];
 
@@ -215,6 +221,8 @@ public:
     ~BackAndForth(){
         delete[] vx;
         delete[] vy;
+        delete[] vxtmp;
+        delete[] vytmp;
         delete[] phi;
         delete[] psi;
         delete[] push_mu;
@@ -222,6 +230,152 @@ public:
         // delete pushforward;
         delete flt2d;
         delete fftps;
+    }
+
+    double calculate_WENO(const double a, const double b, const double c, const double d){
+        /* setting constants for WENO. The constants need to satisfy w0 + w1 + w2 = 1 */
+        double eps = 1e-6;
+        double IS0 = 13.0 * (a-b)*(a-b) + 3.0 * (a-3*b)*(a-3*b);
+        double IS1 = 13.0 * (b-c)*(b-c) + 3.0 * (b+c)*(b+c);
+        double IS2 = 13.0 * (c-d)*(c-d) + 3.0 * (3*c-d)*(3*c-d);
+        double alpha0 = 1.0/((eps + IS0)*(eps + IS0));
+        double alpha1 = 6.0/((eps + IS1)*(eps + IS1));
+        double alpha2 = 3.0/((eps + IS2)*(eps + IS2));
+        double w0 = alpha0 / (alpha0 + alpha1 + alpha2);
+        double w2 = alpha2 / (alpha0 + alpha1 + alpha2);
+
+        /* return the value */
+        return w0/3.0 * (a - 2.0 * b + c) + (w2 - 0.5)/6.0 * (b - 2.0 * c + d);
+    }
+
+    double calculate_gradx_WENO(const double* phi, const int i, const int j){
+        double phi_j_pre_2  = phi[i*n1+ (int)fmax(0,j-2)];
+        double phi_j_pre_1  = phi[i*n1+ (int)fmax(0,j-1)];
+        double phi_j        = phi[i*n1+j];
+        double phi_j_post_1 = phi[i*n1+ (int)fmin(n1-1,j+1)];
+        double phi_j_post_2 = phi[i*n1+ (int)fmin(n1-1,j+2)];
+        double phi_j_post_3 = phi[i*n1+ (int)fmin(n1-1,j+3)];
+        double eval = n1/12.0 * (
+                                 -         (phi_j_pre_1  - phi_j_pre_2)
+                                 + 7.0  *  (phi_j        - phi_j_pre_1)
+                                 + 7.0  *  (phi_j_post_1 - phi_j)
+                                 -         (phi_j_post_2 - phi_j_post_1)
+                                );
+        double a = n1 * (phi_j_post_3 - 2.0 * phi_j_post_2 + phi_j_post_1);
+        double b = n1 * (phi_j_post_2 - 2.0 * phi_j_post_1 + phi_j);
+        double c = n1 * (phi_j_post_1 - 2.0 * phi_j + phi_j_pre_1);
+        double d = n1 * (phi_j - 2.0 * phi_j_pre_1  + phi_j_pre_2);
+        eval += calculate_WENO(a,b,c,d);
+        return eval;
+    }
+
+    double calculate_grady_WENO(const double* phi, const int i, const int j){
+        double phi_i_pre_2  = phi[(int)fmax(0,i-2)*n1+j];
+        double phi_i_pre_1  = phi[(int)fmax(0,i-1)*n1+j];
+        double phi_i        = phi[i*n1+j];
+        double phi_i_post_1 = phi[(int)fmin(n2-1,i+1)*n1+j];
+        double phi_i_post_2 = phi[(int)fmin(n2-1,i+2)*n1+j];
+        double phi_i_post_3 = phi[(int)fmin(n2-1,i+3)*n1+j];
+        double eval = n2/12.0 * (
+                                 -         (phi_i_pre_1  - phi_i_pre_2)
+                                 + 7.0  *  (phi_i        - phi_i_pre_1)
+                                 + 7.0  *  (phi_i_post_1 - phi_i)
+                                 -         (phi_i_post_2 - phi_i_post_1)
+                                );
+        double a = n2 * (phi_i_post_3 - 2.0 * phi_i_post_2 + phi_i_post_1);
+        double b = n2 * (phi_i_post_2 - 2.0 * phi_i_post_1 + phi_i);
+        double c = n2 * (phi_i_post_1 - 2.0 * phi_i + phi_i_pre_1);
+        double d = n2 * (phi_i - 2.0 * phi_i_pre_1  + phi_i_pre_2);
+        eval += calculate_WENO(a,b,c,d);
+        return eval;
+    }
+
+    double calculate_gradx_WENO_(const double* phi, const int i, const int j){
+        double phi_j_pre_3  = phi[i*n1+ (int)fmax(0,j-3)];
+        double phi_j_pre_2  = phi[i*n1+ (int)fmax(0,j-2)];
+        double phi_j_pre_1  = phi[i*n1+ (int)fmax(0,j-1)];
+        double phi_j        = phi[i*n1+j];
+        double phi_j_post_1 = phi[i*n1+ (int)fmin(n1-1,j+1)];
+        double phi_j_post_2 = phi[i*n1+ (int)fmin(n1-1,j+2)];
+        double eval = n1/12.0 * (
+                                 -         (phi_j_pre_1  - phi_j_pre_2)
+                                 + 7.0  *  (phi_j        - phi_j_pre_1)
+                                 + 7.0  *  (phi_j_post_1 - phi_j)
+                                 -         (phi_j_post_2 - phi_j_post_1)
+                                );
+        double a = n1 * (phi_j_pre_1 - 2.0 * phi_j_pre_2 + phi_j_pre_3);
+        double b = n1 * (phi_j - 2.0 * phi_j_pre_1 + phi_j_pre_2);
+        double c = n1 * (phi_j_post_1 - 2.0 * phi_j + phi_j_pre_1);
+        double d = n1 * (phi_j_post_2 - 2.0 * phi_j_post_1 + phi_j);
+        eval -= calculate_WENO(a,b,c,d);
+        return eval;
+
+    }
+
+    double calculate_grady_WENO_(const double* phi, const int i, const int j){
+        double phi_i_pre_3  = phi[(int)fmax(0,i-3)*n1+j];
+        double phi_i_pre_2  = phi[(int)fmax(0,i-2)*n1+j];
+        double phi_i_pre_1  = phi[(int)fmax(0,i-1)*n1+j];
+        double phi_i        = phi[i*n1+j];
+        double phi_i_post_1 = phi[(int)fmin(n2-1,i+1)*n1+j];
+        double phi_i_post_2 = phi[(int)fmin(n2-1,i+2)*n1+j];
+        double eval = n2/12.0 * (
+                                 -         (phi_i_pre_1  - phi_i_pre_2)
+                                 + 7.0  *  (phi_i        - phi_i_pre_1)
+                                 + 7.0  *  (phi_i_post_1 - phi_i)
+                                 -         (phi_i_post_2 - phi_i_post_1)
+                                );
+        double a = n2 * (phi_i_pre_1 - 2.0 * phi_i_pre_2 + phi_i_pre_3);
+        double b = n2 * (phi_i - 2.0 * phi_i_pre_1 + phi_i_pre_2);
+        double c = n2 * (phi_i_post_1 - 2.0 * phi_i + phi_i_pre_1);
+        double d = n2 * (phi_i_post_2 - 2.0 * phi_i_post_1 + phi_i);
+        eval -= calculate_WENO(a,b,c,d);
+
+        return eval;
+
+        
+    }
+
+    double calculate_gradx_vx(const double* phi, const int i, const int j){
+        double phi_j_pre_3  = phi[i*n1+ (int)fmax(0,j-3)];
+        double phi_j_pre_2  = phi[i*n1+ (int)fmax(0,j-2)];
+        double phi_j_pre_1  = phi[i*n1+ (int)fmax(0,j-1)];
+        double phi_j        = phi[i*n1+j];
+        double phi_j_post_1 = phi[i*n1+ (int)fmin(n1-1,j+1)];
+        double phi_j_post_2 = phi[i*n1+ (int)fmin(n1-1,j+2)];
+        double phi_j_post_3 = phi[i*n1+ (int)fmin(n1-1,j+3)];
+
+        double eval = 3.0/4.0 * (phi_j_post_1 - phi_j_pre_1) - 3.0/20.0 * (phi_j_post_2 - phi_j_pre_2) + 1.0/60.0 * (phi_j_post_3 - phi_j_pre_3);
+        // double eval = 1.0/4.0 * ((phi_j_post_1 - phi_j_pre_1) + (phi_j_post_2 - phi_j_pre_2) + (phi_j_post_3 - phi_j_pre_3));
+
+        return 1.0*n1*eval;
+    }
+
+    double calculate_grady_vy(const double* phi, const int i, const int j){
+        double phi_i_pre_3  = phi[(int)fmax(0,i-3)*n1+j];
+        double phi_i_pre_2  = phi[(int)fmax(0,i-2)*n1+j];
+        double phi_i_pre_1  = phi[(int)fmax(0,i-1)*n1+j];
+        double phi_i        = phi[i*n1+j];
+        double phi_i_post_1 = phi[(int)fmin(n2-1,i+1)*n1+j];
+        double phi_i_post_2 = phi[(int)fmin(n2-1,i+2)*n1+j];
+        double phi_i_post_3 = phi[(int)fmin(n2-1,i+3)*n1+j];
+
+        double eval = 3.0/4.0 * (phi_i_post_1 - phi_i_pre_1) - 3.0/20.0 * (phi_i_post_2 - phi_i_pre_2) + 1.0/60.0 * (phi_i_post_3 - phi_i_pre_3);
+        // double eval = 1.0/4.0 * ((phi_i_post_1 - phi_i_pre_1) + (phi_i_post_2 - phi_i_pre_2) + (phi_i_post_3 - phi_i_pre_3));
+
+        return 1.0*n2*eval;
+        
+    }
+
+    void calculate_gradient2(const double* phi, double* vx, double* vy){
+        for(int i=0;i<n2;++i){
+            for(int j=0;j<n1;++j){
+                // vx[i*n1+j] = calculate_gradx_WENO(phi, i, j);
+                // vy[i*n1+j] = calculate_grady_WENO(phi, i, j);
+                vx[i*n1+j] = calculate_gradx_vx(phi, i, j);
+                vy[i*n1+j] = calculate_grady_vy(phi, i, j);
+            }
+        }
     }
 
     void calculate_gradient(const double* phi_c, double* vx, double* vy){
@@ -282,7 +436,11 @@ public:
         return tau/sigma;
     }
 
-    void calculate_push_rho(const double* rho, double* push_rho,const double* vx,const double* vy){
+    void calculate_push_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxtmp,const double* vytmp){
+
+        double eps = 1e-6;
+
+        double xpost,ypost,xpre,ypre;
 
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
@@ -296,13 +454,58 @@ public:
                 double rhovalue=interpolate_function(x,y,rho);
 
                 if(rhovalue>0){
-                    double vxval_post=vx[i*n1+(int)fmin(n1-1,j+1)];
-                    double vyval_post=vy[(int)fmin(n2-1,i+1)*n1+j];
+                    xpre = x - 1.0/n1;
+                    ypre = y - 1.0/n2;
+                    double vxval_pre_1 = interpolate_function_v(xpre,y,vxtmp);
+                    double vyval_pre_1 = interpolate_function_v(x,ypre,vytmp);
+                    xpre = x - 2.0/n1;
+                    ypre = y - 2.0/n2;
+                    double vxval_pre_2 = interpolate_function_v(xpre,y,vxtmp);
+                    double vyval_pre_2 = interpolate_function_v(x,ypre,vytmp);
+                    xpre = x - 3.0/n1;
+                    ypre = y - 3.0/n2;
+                    double vxval_pre_3 = interpolate_function_v(xpre,y,vxtmp);
+                    double vyval_pre_3 = interpolate_function_v(x,ypre,vytmp);
 
-                    double gradx_vx=1.0*n1*(vxval_post-vxval);
-                    double grady_vy=1.0*n2*(vyval_post-vyval);
+                    xpost = x + 1.0/n1;
+                    ypost = y + 1.0/n2;
+                    double vxval_post_1 = interpolate_function_v(xpost,y,vxtmp);
+                    double vyval_post_1 = interpolate_function_v(x,ypost,vytmp);
+                    xpost = x + 2.0/n1;
+                    ypost = y + 2.0/n2;
+                    double vxval_post_2 = interpolate_function_v(xpost,y,vxtmp);
+                    double vyval_post_2 = interpolate_function_v(x,ypost,vytmp);
+                    xpost = x + 3.0/n1;
+                    ypost = y + 3.0/n2;
+                    double vxval_post_3 = interpolate_function_v(xpost,y,vxtmp);
+                    double vyval_post_3 = interpolate_function_v(x,ypost,vytmp);
 
-                    push_rho[i*n1+j]=rhovalue*fabs((1.0-tau*gradx_vx)*(1.0-tau*grady_vy)); 
+                    double gradx_vx = 1.0*n1* (3.0/4.0 * (vxval_post_1 - vxval_pre_1) - 3.0/20.0 * (vxval_post_2 - vxval_pre_2) + 1.0/60.0 * (vxval_post_3 - vxval_pre_3));
+                    double grady_vy = 1.0*n2* (3.0/4.0 * (vyval_post_1 - vyval_pre_1) - 3.0/20.0 * (vyval_post_2 - vyval_pre_2) + 1.0/60.0 * (vyval_post_3 - vyval_pre_3));
+
+                    // push_rho[i*n1+j]=rhovalue/fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy)); 
+                    double eval = fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy));
+                    eval = fmax(0.05,eval);
+                    push_rho[i*n1+j] = rhovalue/eval;
+
+
+                ////////////////////////////////////
+                    // double vxval_post=vx[i*n1+(int)fmin(n1-1,j+1)];
+                    // double vyval_post=vy[(int)fmin(n2-1,i+1)*n1+j];
+
+                    // double gradx_vx=1.0*n1*(vxval_post-vxval);
+                    // double grady_vy=1.0*n2*(vyval_post-vyval);
+
+                    // double gradx_vx=calculate_gradx_WENO_(vx, i, j);
+                    // double grady_vy=calculate_grady_WENO_(vy, i, j);
+                ////////////////////////////////////
+                    // double gradx_vx=calculate_gradx_vx(vx, i, j);
+                    // double grady_vy=calculate_grady_vy(vy, i, j);
+
+                    // push_rho[i*n1+j]=rhovalue*fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy)); 
+                ////////////////////////////////////
+
+                    
                 }else{
                     push_rho[i*n1+j]=0;
                 }
@@ -310,6 +513,7 @@ public:
             }
         }
     }
+
 
     // This function will provide S1(x,) where x and y are n [0,1] double values
     double interpolate_function(double x,double y,const double* func){
@@ -327,6 +531,65 @@ public:
         double interpolated_value = (1-lambda1)*(1-lambda2)*x00+(lambda1)*(1-lambda2)*x01
                                    +(1-lambda1)*(lambda2)  *x10+(lambda1)*(lambda2)  *x11;
 
+        // double x02 = func[(int)fmin(n2-1,fmax(0,indi))*n1+(int)fmin(n1-1,fmax(0,indj+2))];
+        // double x12 = func[(int)fmin(n2-1,fmax(0,indi+1))*n1+(int)fmin(n1-1,fmax(0,indj+2))];
+        // double x20 = func[(int)fmin(n2-1,fmax(0,indi+2))*n1+(int)fmin(n1-1,fmax(0,indj))];
+        // double x21 = func[(int)fmin(n2-1,fmax(0,indi+2))*n1+(int)fmin(n1-1,fmax(0,indj+1))];
+        // double x22 = func[(int)fmin(n2-1,fmax(0,indi+2))*n1+(int)fmin(n1-1,fmax(0,indj+2))];
+        
+        // double x0 = ((int)indj + 0.5)/n1;
+        // double x1 = x0 + 1.0/n1;
+        // double x2 = x0 + 2.0/n1;
+
+        // double y0 = ((int)indi + 0.5)/n2;
+        // double y1 = y0 + 1.0/n2;
+        // double y2 = y0 + 2.0/n2;
+
+        // double interpolated_value = ((x1-x)*(x2-x))/((x1-x0)*(x2-x0)) * ((y1-y)*(y2-y))/((y1-y0)*(y2-y0)) * x00
+        //                            +((x0-x)*(x2-x))/((x0-x1)*(x2-x1)) * ((y1-y)*(y2-y))/((y1-y0)*(y2-y0)) * x01
+        //                            +((x1-x)*(x0-x))/((x1-x2)*(x0-x2)) * ((y1-y)*(y2-y))/((y1-y0)*(y2-y0)) * x02
+
+        //                            +((x1-x)*(x2-x))/((x1-x0)*(x2-x0)) * ((y0-y)*(y2-y))/((y0-y1)*(y2-y1)) * x10
+        //                            +((x0-x)*(x2-x))/((x0-x1)*(x2-x1)) * ((y0-y)*(y2-y))/((y0-y1)*(y2-y1)) * x11
+        //                            +((x1-x)*(x0-x))/((x1-x2)*(x0-x2)) * ((y0-y)*(y2-y))/((y0-y1)*(y2-y1)) * x12
+
+        //                            +((x1-x)*(x2-x))/((x1-x0)*(x2-x0)) * ((y1-y)*(y0-y))/((y1-y2)*(y0-y2)) * x20
+        //                            +((x0-x)*(x2-x))/((x0-x1)*(x2-x1)) * ((y1-y)*(y0-y))/((y1-y2)*(y0-y2)) * x21
+        //                            +((x1-x)*(x0-x))/((x1-x2)*(x0-x2)) * ((y1-y)*(y0-y))/((y1-y2)*(y0-y2)) * x22;
+        return interpolated_value;  
+    }
+
+    // This function will provide S1(x,) where x and y are n [0,1] double values
+    double interpolate_function_v(double x,double y,const double* func){
+
+        if(x>1 || x<0 || y>1 || y<0) return 0;
+
+        double indj=fmin(n1-1,fmax(0,x*n1-0.5));
+        double indi=fmin(n2-1,fmax(0,y*n2-0.5));
+
+        double lambda1=indj-(int)indj;
+        double lambda2=indi-(int)indi;
+
+        double x00 = func[(int)(indi)*n1+(int)(indj)];
+        double x01 = 0;
+        double x10 = 0;
+        double x11 = 0;
+        if(indj+1 <= n1-1 && indi+1 <= n2-1){
+            // x11 = func[(int)fmin(n2-1,fmax(0,indi+1))*n1+(int)fmin(n1-1,fmax(0,indj+1))];
+            // x01 = func[(int)fmin(n2-1,fmax(0,indi))*n1+(int)fmin(n1-1,fmax(0,indj+1))];
+            // x10 = func[(int)fmin(n2-1,fmax(0,indi+1))*n1+(int)fmin(n1-1,fmax(0,indj))];
+
+            x11 = func[(int)(indi+1)*n1+(int)(indj+1)];
+            x01 = func[(int)(indi)*n1+(int)(indj+1)];
+            x10 = func[(int)(indi+1)*n1+(int)(indj)];
+        }else if(indj+1 <= n1-1){
+            x01 = func[(int)(indi)*n1+(int)(indj+1)];
+        }else if(indi+1 <= n2-1){
+            x10 = func[(int)(indi+1)*n1+(int)(indj)];
+        }
+
+        double interpolated_value = (1-lambda1)*(1-lambda2)*x00+(lambda1)*(1-lambda2)*x01
+                                   +(1-lambda1)*(lambda2)  *x10+(lambda1)*(lambda2)  *x11;
         return interpolated_value;  
     }
 
@@ -355,9 +618,10 @@ public:
         // helper_f.calculate_DEstar_normalized(phi);
 
         calculate_gradient(psi, vx, vy);
-        calculate_push_rho(helper_f.DEstar, push_mu,vx,vy);
+        calculate_gradient(phi, vxtmp, vytmp);
+        calculate_push_rho(helper_f.DEstar, push_mu,vx,vy,vxtmp,vytmp);
 
-        fftps->perform_inverse_laplacian(push_mu,mu,psi_c1,psi_c2);
+        fftps->perform_inverse_laplacian(push_mu,mu,psi_c1,psi_c2,sigma);
 
         W2_value_previous=calculate_dual_value(helper_f,phi,psi,mu);
         error_nu=calculate_h_minus_1(fftps,push_mu,mu);
@@ -384,12 +648,13 @@ public:
         flt2d->find_c_concave(psi,phi,tau);
             
         calculate_gradient(phi, vx, vy);
-        calculate_push_rho(mu, push_mu,vx,vy);
+        calculate_gradient(psi, vxtmp, vytmp);
+        calculate_push_rho(mu, push_mu,vx,vy,vxtmp,vytmp);
         
         helper_f.calculate_DEstar(phi);
         // helper_f.calculate_DEstar_normalized(phi);
 
-        fftps->perform_inverse_laplacian(push_mu,helper_f.DEstar,phi_c1,phi_c2);
+        fftps->perform_inverse_laplacian(push_mu,helper_f.DEstar,phi_c1,phi_c2,sigma);
 
 
         W2_value_previous=calculate_dual_value(helper_f,phi,psi,mu);
@@ -427,14 +692,14 @@ public:
         for(int i=0;i<n1*n2;++i){
             phimax = fmax(phimax,-phi[i]);
         }
-        if(phimax > 5) return 0.1;
+        if(phimax > 5) return 2;
         return phimax *= 0.2;
     }
 
     /**
         Calculate infgradphi = inf(|nabla phi|)
     */
-    double calculate_infgradphi_on_level_set(const double lambda) const{
+    double calculate_infgradphi_on_level_set(const double lambda){
 
         double infgradphi= 1000;
         int count = 0;
@@ -442,15 +707,17 @@ public:
             for(int j=0;j<n1-1;++j){
                 // if(fabs(fabs(phi[i*n1+j]/lambda) - 1)  < 1e-2){
                 if(-phi[i] > 0 && -phi[i] < lambda){
-                    double gradxphi = 1.0*n1*(phi[i*n1+(int) fmin(n1-1,j+1)]-phi[i*n1+j]);
-                    double gradyphi = 1.0*n2*(phi[(int) fmin(n2-1,i+1)*n1+j]-phi[i*n1+j]);
+                    // double gradxphi = 1.0*n1*(phi[i*n1+j+1]-phi[i*n1+j]);
+                    // double gradyphi = 1.0*n2*(phi[(i+1)*n1+j]-phi[i*n1+j]);
+                    double gradxphi = calculate_gradx_vx(phi,i,j);
+                    double gradyphi = calculate_grady_vy(phi,i,j);
                     double eval = gradxphi*gradxphi + gradyphi*gradyphi;
                     infgradphi = fmin(infgradphi, eval);
                 }
             }
         }
 
-        return sqrt(infgradphi);
+        return fmax(1,sqrt(infgradphi));
     }
 
     /** 
@@ -474,8 +741,8 @@ public:
     }
 
     void set_coeff(double& c1, double& c2, const double C, const double mu_max, const double d1, const double d2, const bool verbose){
-        c1 = C * d1 + d2;
-        c2 = C * d1 + tau * mu_max;
+        c1 = C * (1 * d1 + d2);
+        c2 = C * (1 * d1 + tau * mu_max);
     }
 
     void initialize_phi(Helper_E& helper_f,const double* mu){
@@ -499,12 +766,19 @@ public:
     }
 
     void calculate_d1_d2(double& d1, double& d2, const double lambda, const double infgradphi){
+        double area = 0;
+        for(int i=0;i<n1*n2;++i){
+            if(-phi[i] > lambda){
+                area += 1;
+            }
+        }
+        area /= n1*n2;
         double eval = pow(lambda / gamma, mprime - 1);
         d1 = eval / infgradphi;
         d2 = eval / lambda * (mprime - 1);
     }
 
-    double start_OT(Helper_E& helper_f, const double* mu, Barenblatt& solution, const int outer_iter){
+    double start_OT(Helper_E& helper_f, const double* mu, Barenblatt& solution, const int outer_iter, Initializer& init){
 
         int skip = 10; // frequency of printout
 
@@ -516,8 +790,8 @@ public:
 
         beta_1 =0.1;
         beta_2 =0.9;
-        alpha_1=1.1;
-        alpha_2=0.9;
+        alpha_1=1.05;
+        alpha_2=0.95;
 
         /*
             Initialize the tolerance based on tau^2
@@ -527,17 +801,22 @@ public:
         for(int i=0;i<n1*n2;++i) mu_max = fmax(mu_max, mu[i]);
         double tol_modified = tolerance * mu_max *tau*tau;
 
+        cout << "Iter : " << outer_iter + 1 << " Tolerance : " << tol_modified << "\n";
+
         /*
             Initialize the coefficients for fftps
         */
 
         double lambda = 1;
         double infgradphi  = 1;
-        double sigma_forth = 1;
-        double sigma_back  = 1;
+        double sigma_forth = 0.05;
+        double sigma_back  = 0.05;
 
         double d1 = 1;
         double d2 = 1;
+
+        C_phi = 1;
+        C_psi = 1;
 
         if(outer_iter==0){
             // initialize_phi(helper_f,mu); // intiailize phi in the first outer iteration
@@ -547,8 +826,6 @@ public:
             phi_c2 = 1;
             psi_c2 = 1;
             
-            C_phi = 1;
-            C_psi = 1;
         }else{
             lambda = calculate_lambda();
             infgradphi = calculate_infgradphi_on_level_set(lambda);
@@ -566,10 +843,22 @@ public:
 
         for(int iter=0;iter<max_iteration;++iter){
 
+            // if(outer_iter == 0 && iter < 500){
+            //     phi_c1 = 100;
+            // psi_c1 = 100;
+
+            // phi_c2 = 1;
+            // psi_c2 = 1;
+            
+            // C_phi = 2;
+            // C_psi = 2;
+            // }
             /*
                 Determinant version pushforward
             */
 
+            sigma_forth = 1;
+            sigma_back  = 1;
             error_mu = perform_OT_iteration_forth_det(helper_f,sigma_forth,W2_value,mu);
             error_nu = perform_OT_iteration_back_det(helper_f,sigma_back,W2_value,mu);
             
@@ -579,10 +868,13 @@ public:
                         
             error=fmin(error_mu,error_nu);
 
-            if(iter % 5 == 0 && iter > 0){
+            if(iter % 1 == 0 && iter > 0){
                 lambda = calculate_lambda();
                 infgradphi = calculate_infgradphi_on_level_set(lambda);
                 calculate_d1_d2(d1, d2, lambda, infgradphi);
+
+                C_phi = fmax(0.5,fmin(5,C_phi/sigma_forth));
+                C_psi = fmax(0.5,fmin(5,C_psi/sigma_back));
                 set_coeff(phi_c1, phi_c2, C_phi, mu_max, d1, d2, false);
                 set_coeff(psi_c1, psi_c2, C_psi, mu_max, d1, d2, false);
             }
@@ -598,7 +890,11 @@ public:
                 /* Compare with actual solution */
                 solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
                 display_iteration(iter,W2_value,error_mu,error_nu,solution_error);
-                cout << "infgradphi : " << infgradphi << "\n";
+                cout << "infgradphi : " << infgradphi << " c1 : " << phi_c1 << " " << psi_c1 << "\n";
+
+                string figurename = "output";
+                for(int i=0;i<n1*n2;++i) push_mu[i] = fabs(push_mu[i] - mu[i]);
+                init.save_image_opencv(push_mu,figurename,(iter+1)/skip, mu_max);
             }
 
             /* 
@@ -606,7 +902,7 @@ public:
             */
 
             // if(W2_value>0 && ((abs(error)<tolerance && iter>=0) || iter==max_iteration-1 || sigma_forth <1e-9) ){
-            if(((abs(error)<tol_modified && abs(error)>0 && iter>=0) || iter==max_iteration-1) ){
+            if(((abs(error)<tol_modified && abs(error)>0 && iter>=1) || iter==max_iteration-1) ){
                 cout<<"Tolerance met!"<<endl;
                 /* Compare with actual solution */
                 solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
@@ -636,7 +932,7 @@ int main(int argc, char** argv){
     double tau=stod(argv[6]);
     double m=stod(argv[7]);
 
-    double M = 0.5; // initial mass
+    double M = 0.3; // initial mass
 
     Barenblatt solution(n1,n2,tau,m,M);
     solution.calc_solution_at_n(0);
@@ -696,9 +992,7 @@ int main(int argc, char** argv){
 
     for(int n=0;n<nt;++n){
 
-        cout<<"iter : "<<n<<endl;
-
-        double solution_error = bf.start_OT(helper_f, mu, solution, n);
+        double solution_error = bf.start_OT(helper_f, mu, solution, n, init);
         // helper_f.calculate_DEstar(bf.phi);
         helper_f.calculate_DEstar_normalized(bf.phi);
         memcpy(mu,helper_f.DEstar,n1*n2*sizeof(double));

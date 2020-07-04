@@ -223,7 +223,7 @@ if __name__ == "__main__":
     if len(sys.argv)==2:
         nt = int(sys.argv[1])
 
-    M = 0.5
+    M = 0.3
 
     print(n1,n2,nt,tau,gamma,m,M)
 

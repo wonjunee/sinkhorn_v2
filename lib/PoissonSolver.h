@@ -52,19 +52,6 @@ public:
         fftw_destroy_plan(planOut);
     }
 
-    void initialize(int n1, int n2) {
-        this->n1=n1;
-        this->n2=n2;
-
-        workspace =(double*) fftw_malloc(n1*n2*sizeof(double));
-
-        planIn = fftw_plan_r2r_2d(n2,n1, workspace, workspace, FFTW_REDFT10,FFTW_REDFT10, FFTW_MEASURE);
-        planOut = fftw_plan_r2r_2d(n2,n1, workspace, workspace, FFTW_REDFT01,FFTW_REDFT01, FFTW_MEASURE);
-        
-        kernel=new double[n1*n2];
-        create_negative_laplacian_kernel_2d();
-    }
-
     void create_negative_laplacian_kernel_2d(){
         for(int i=0;i<n2;i++){
             for(int j=0;j<n1;j++){
@@ -85,7 +72,7 @@ public:
         fftw_execute(planIn);
     }
 
-    void perform_inverse_laplacian(const double* push_mu, const double* DFstar, const double c1, const double c2){
+    void perform_inverse_laplacian(const double* push_mu, const double* DFstar, const double c1, const double c2, const double sigma){
 
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
@@ -97,7 +84,7 @@ public:
         // workspace[0]=0;
 
         for(int i=0;i<n1*n2;++i){
-            workspace[i]/=4*(n1)*(n2)*(c1+c2*kernel[i]);
+            workspace[i]/=4*(n1)*(n2)*(c1+c2*kernel[i])/sigma;
         }
 
         fftw_execute(planOut);
