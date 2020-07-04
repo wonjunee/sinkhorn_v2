@@ -959,10 +959,6 @@ int main(int argc, char** argv){
     printf("%s", ctime(&my_time));
     cout << endl;
 
-
-    
-
-
     cout << "n1   : " << n1 <<endl;
     cout << "n2   : " << n2 <<endl;
     cout << "nt   : " << nt <<endl;
