@@ -458,30 +458,33 @@ public:
                     ypre = y - 1.0/n2;
                     double vxval_pre_1 = interpolate_function_v(xpre,y,vxtmp);
                     double vyval_pre_1 = interpolate_function_v(x,ypre,vytmp);
-                    xpre = x - 2.0/n1;
-                    ypre = y - 2.0/n2;
-                    double vxval_pre_2 = interpolate_function_v(xpre,y,vxtmp);
-                    double vyval_pre_2 = interpolate_function_v(x,ypre,vytmp);
-                    xpre = x - 3.0/n1;
-                    ypre = y - 3.0/n2;
-                    double vxval_pre_3 = interpolate_function_v(xpre,y,vxtmp);
-                    double vyval_pre_3 = interpolate_function_v(x,ypre,vytmp);
+                    // xpre = x - 2.0/n1;
+                    // ypre = y - 2.0/n2;
+                    // double vxval_pre_2 = interpolate_function_v(xpre,y,vxtmp);
+                    // double vyval_pre_2 = interpolate_function_v(x,ypre,vytmp);
+                    // xpre = x - 3.0/n1;
+                    // ypre = y - 3.0/n2;
+                    // double vxval_pre_3 = interpolate_function_v(xpre,y,vxtmp);
+                    // double vyval_pre_3 = interpolate_function_v(x,ypre,vytmp);
 
                     xpost = x + 1.0/n1;
                     ypost = y + 1.0/n2;
                     double vxval_post_1 = interpolate_function_v(xpost,y,vxtmp);
                     double vyval_post_1 = interpolate_function_v(x,ypost,vytmp);
-                    xpost = x + 2.0/n1;
-                    ypost = y + 2.0/n2;
-                    double vxval_post_2 = interpolate_function_v(xpost,y,vxtmp);
-                    double vyval_post_2 = interpolate_function_v(x,ypost,vytmp);
-                    xpost = x + 3.0/n1;
-                    ypost = y + 3.0/n2;
-                    double vxval_post_3 = interpolate_function_v(xpost,y,vxtmp);
-                    double vyval_post_3 = interpolate_function_v(x,ypost,vytmp);
+                    // xpost = x + 2.0/n1;
+                    // ypost = y + 2.0/n2;
+                    // double vxval_post_2 = interpolate_function_v(xpost,y,vxtmp);
+                    // double vyval_post_2 = interpolate_function_v(x,ypost,vytmp);
+                    // xpost = x + 3.0/n1;
+                    // ypost = y + 3.0/n2;
+                    // double vxval_post_3 = interpolate_function_v(xpost,y,vxtmp);
+                    // double vyval_post_3 = interpolate_function_v(x,ypost,vytmp);
 
-                    double gradx_vx = 1.0*n1* (3.0/4.0 * (vxval_post_1 - vxval_pre_1) - 3.0/20.0 * (vxval_post_2 - vxval_pre_2) + 1.0/60.0 * (vxval_post_3 - vxval_pre_3));
-                    double grady_vy = 1.0*n2* (3.0/4.0 * (vyval_post_1 - vyval_pre_1) - 3.0/20.0 * (vyval_post_2 - vyval_pre_2) + 1.0/60.0 * (vyval_post_3 - vyval_pre_3));
+                    // double gradx_vx = 1.0*n1* (3.0/4.0 * (vxval_post_1 - vxval_pre_1) - 3.0/20.0 * (vxval_post_2 - vxval_pre_2) + 1.0/60.0 * (vxval_post_3 - vxval_pre_3));
+                    // double grady_vy = 1.0*n2* (3.0/4.0 * (vyval_post_1 - vyval_pre_1) - 3.0/20.0 * (vyval_post_2 - vyval_pre_2) + 1.0/60.0 * (vyval_post_3 - vyval_pre_3));
+
+                    double gradx_vx = 1.0*n1* (0.5 * (vxval_post_1 - vxval_pre_1));
+                    double grady_vy = 1.0*n2* (0.5 * (vyval_post_1 - vyval_pre_1));
 
                     // push_rho[i*n1+j]=rhovalue/fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy)); 
                     double eval = fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy));
@@ -865,8 +868,8 @@ public:
 
                 // C_phi = fmax(0.5,fmin(1,C_phi/sigma_forth));
                 // C_psi = fmax(0.5,fmin(1,C_psi/sigma_back));
-                C_phi = 0.1;
-                C_psi = 0.1;
+                C_phi = 0.3;
+                C_psi = 0.3;
                 set_coeff(phi_c1, phi_c2, C_phi, mu_max, d1, d2, false);
                 set_coeff(psi_c1, psi_c2, C_psi, mu_max, d1, d2, false);
             }
