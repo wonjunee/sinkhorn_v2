@@ -485,7 +485,7 @@ public:
 
                     // push_rho[i*n1+j]=rhovalue/fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy)); 
                     double eval = fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy));
-                    eval = fmax(0.05,eval);
+                    eval = fmax(sqrt(1.0/n1),eval);
                     push_rho[i*n1+j] = rhovalue/eval;
 
 
@@ -693,7 +693,7 @@ public:
             phimax = fmax(phimax,-phi[i]);
         }
         if(phimax > 5) return 2;
-        return phimax *= 0.2;
+        return phimax * 0.2;
     }
 
     /**
@@ -707,10 +707,10 @@ public:
             for(int j=0;j<n1-1;++j){
                 // if(fabs(fabs(phi[i*n1+j]/lambda) - 1)  < 1e-2){
                 if(-phi[i] > 0 && -phi[i] < lambda){
-                    // double gradxphi = 1.0*n1*(phi[i*n1+j+1]-phi[i*n1+j]);
-                    // double gradyphi = 1.0*n2*(phi[(i+1)*n1+j]-phi[i*n1+j]);
-                    double gradxphi = calculate_gradx_vx(phi,i,j);
-                    double gradyphi = calculate_grady_vy(phi,i,j);
+                    double gradxphi = 1.0*n1*(phi[i*n1+j+1]-phi[i*n1+j]);
+                    double gradyphi = 1.0*n2*(phi[(i+1)*n1+j]-phi[i*n1+j]);
+                    // double gradxphi = calculate_gradx_vx(phi,i,j);
+                    // double gradyphi = calculate_grady_vy(phi,i,j);
                     double eval = gradxphi*gradxphi + gradyphi*gradyphi;
                     infgradphi = fmin(infgradphi, eval);
                 }
@@ -741,8 +741,8 @@ public:
     }
 
     void set_coeff(double& c1, double& c2, const double C, const double mu_max, const double d1, const double d2, const bool verbose){
-        c1 = C * (1 * d1 + d2);
-        c2 = C * (1 * d1 + tau * mu_max);
+        c1 = C * d1 + d2;
+        c2 = C * d1 + tau * mu_max;
     }
 
     void initialize_phi(Helper_E& helper_f,const double* mu){
@@ -843,16 +843,6 @@ public:
 
         for(int iter=0;iter<max_iteration;++iter){
 
-            // if(outer_iter == 0 && iter < 500){
-            //     phi_c1 = 100;
-            // psi_c1 = 100;
-
-            // phi_c2 = 1;
-            // psi_c2 = 1;
-            
-            // C_phi = 2;
-            // C_psi = 2;
-            // }
             /*
                 Determinant version pushforward
             */
@@ -868,13 +858,15 @@ public:
                         
             error=fmin(error_mu,error_nu);
 
-            if(iter % 1 == 0 && iter > 0){
+            if(iter % 5 == 0 && iter > 0){
                 lambda = calculate_lambda();
                 infgradphi = calculate_infgradphi_on_level_set(lambda);
                 calculate_d1_d2(d1, d2, lambda, infgradphi);
 
-                C_phi = fmax(0.5,fmin(5,C_phi/sigma_forth));
-                C_psi = fmax(0.5,fmin(5,C_psi/sigma_back));
+                // C_phi = fmax(0.5,fmin(1,C_phi/sigma_forth));
+                // C_psi = fmax(0.5,fmin(1,C_psi/sigma_back));
+                C_phi = 0.1;
+                C_psi = 0.1;
                 set_coeff(phi_c1, phi_c2, C_phi, mu_max, d1, d2, false);
                 set_coeff(psi_c1, psi_c2, C_psi, mu_max, d1, d2, false);
             }
@@ -888,13 +880,13 @@ public:
             if(iter%skip==skip-1){
                 cout<<"|";
                 /* Compare with actual solution */
-                solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
+                // solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
                 display_iteration(iter,W2_value,error_mu,error_nu,solution_error);
                 cout << "infgradphi : " << infgradphi << " c1 : " << phi_c1 << " " << psi_c1 << "\n";
 
-                string figurename = "output";
-                for(int i=0;i<n1*n2;++i) push_mu[i] = fabs(push_mu[i] - mu[i]);
-                init.save_image_opencv(push_mu,figurename,(iter+1)/skip, mu_max);
+                // string figurename = "output";
+                // for(int i=0;i<n1*n2;++i) push_mu[i] = fabs(push_mu[i] - mu[i]);
+                // init.save_image_opencv(push_mu,figurename,(iter+1)/skip, mu_max);
             }
 
             /* 
@@ -932,7 +924,7 @@ int main(int argc, char** argv){
     double tau=stod(argv[6]);
     double m=stod(argv[7]);
 
-    double M = 0.3; // initial mass
+    double M = 1.0; // initial mass
 
     Barenblatt solution(n1,n2,tau,m,M);
     solution.calc_solution_at_n(0);
@@ -979,7 +971,7 @@ int main(int argc, char** argv){
     create_bin_file(mu,n1*n2,filename);
 
     string figurename = "barenblatt";
-    init.save_image_opencv(mu,figurename,0);
+    // init.save_image_opencv(mu,figurename,0);
 
     clock_t time;
     time=clock();
@@ -1004,7 +996,7 @@ int main(int argc, char** argv){
 
         sum_solution += solution_error;
 
-        init.save_image_opencv(mu,figurename,n+1);
+        // init.save_image_opencv(mu,figurename,n+1);
     }
 
     time=clock()-time;
