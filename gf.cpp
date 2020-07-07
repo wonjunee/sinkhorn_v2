@@ -438,7 +438,7 @@ public:
 
     void calculate_push_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxtmp,const double* vytmp){
 
-        double eps = pow(1.0/n1, 0.25);
+        double eps = pow(1.0/n1, 0.4);
 
         double xpost,ypost,xpre,ypre;
 
@@ -456,8 +456,11 @@ public:
                 if(rhovalue>0){
                     xpre = x - 1.0/n1;
                     ypre = y - 1.0/n2;
-                    double vxval_pre_1 = interpolate_function_v(xpre,y,vxtmp);
-                    double vyval_pre_1 = interpolate_function_v(x,ypre,vytmp);
+                    double vxval_pre_x_1 = interpolate_function_v(xpre,y,vxtmp);
+                    double vyval_pre_y_1 = interpolate_function_v(x,ypre,vytmp);
+
+                    double vxval_pre_y_1 = interpolate_function_v(x,ypre,vxtmp);
+                    double vyval_pre_x_1 = interpolate_function_v(xpre,y,vytmp);
                     // xpre = x - 2.0/n1;
                     // ypre = y - 2.0/n2;
                     // double vxval_pre_2 = interpolate_function_v(xpre,y,vxtmp);
@@ -469,8 +472,11 @@ public:
 
                     xpost = x + 1.0/n1;
                     ypost = y + 1.0/n2;
-                    double vxval_post_1 = interpolate_function_v(xpost,y,vxtmp);
-                    double vyval_post_1 = interpolate_function_v(x,ypost,vytmp);
+                    double vxval_post_x_1 = interpolate_function_v(xpost,y,vxtmp);
+                    double vyval_post_y_1 = interpolate_function_v(x,ypost,vytmp);
+
+                    double vxval_post_y_1 = interpolate_function_v(x,ypost,vxtmp);
+                    double vyval_post_x_1 = interpolate_function_v(xpost,y,vytmp);
                     // xpost = x + 2.0/n1;
                     // ypost = y + 2.0/n2;
                     // double vxval_post_2 = interpolate_function_v(xpost,y,vxtmp);
@@ -480,17 +486,21 @@ public:
                     // double vxval_post_3 = interpolate_function_v(xpost,y,vxtmp);
                     // double vyval_post_3 = interpolate_function_v(x,ypost,vytmp);
 
-                    // double gradx_vx = 1.0*n1* (3.0/4.0 * (vxval_post_1 - vxval_pre_1) - 3.0/20.0 * (vxval_post_2 - vxval_pre_2) + 1.0/60.0 * (vxval_post_3 - vxval_pre_3));
-                    // double grady_vy = 1.0*n2* (3.0/4.0 * (vyval_post_1 - vyval_pre_1) - 3.0/20.0 * (vyval_post_2 - vyval_pre_2) + 1.0/60.0 * (vyval_post_3 - vyval_pre_3));
+                    // double gradx_vx = 1.0*n1* (3.0/4.0 * (vxval_post_x_1 - vxval_pre_x_1) - 3.0/20.0 * (vxval_post_2 - vxval_pre_2) + 1.0/60.0 * (vxval_post_3 - vxval_pre_3));
+                    // double grady_vy = 1.0*n2* (3.0/4.0 * (vyval_post_y_1 - vyval_pre_y_1) - 3.0/20.0 * (vyval_post_2 - vyval_pre_2) + 1.0/60.0 * (vyval_post_3 - vyval_pre_3));
 
-                    // double gradx_vx = 1.0*n1* (3.0/4.0 * (vxval_post_1 - vxval_pre_1) - 3.0/20.0 * (vxval_post_2 - vxval_pre_2) );
-                    // double grady_vy = 1.0*n2* (3.0/4.0 * (vyval_post_1 - vyval_pre_1) - 3.0/20.0 * (vyval_post_2 - vyval_pre_2) );
+                    // double gradx_vx = 1.0*n1* (3.0/4.0 * (vxval_post_x_1 - vxval_pre_x_1) - 3.0/20.0 * (vxval_post_2 - vxval_pre_2) );
+                    // double grady_vy = 1.0*n2* (3.0/4.0 * (vyval_post_y_1 - vyval_pre_y_1) - 3.0/20.0 * (vyval_post_2 - vyval_pre_2) );
 
-                    double gradx_vx = 1.0*n1* (0.5 * (vxval_post_1 - vxval_pre_1));
-                    double grady_vy = 1.0*n2* (0.5 * (vyval_post_1 - vyval_pre_1));
+                    double gradx_vx = 1.0*n1* (0.5 * (vxval_post_x_1 - vxval_pre_x_1));
+                    double grady_vy = 1.0*n2* (0.5 * (vyval_post_y_1 - vyval_pre_y_1));
+
+                    double grady_vx = 1.0*n1* (0.5 * (vxval_post_y_1 - vxval_pre_y_1));
+                    double gradx_vy = 1.0*n1* (0.5 * (vyval_post_x_1 - vyval_pre_x_1));
 
                     // push_rho[i*n1+j]=rhovalue/fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy)); 
-                    double eval = fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy));
+                    double eval = fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy) - tau*tau * grady_vx * gradx_vy);
+                    // double eval = fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy));
                     eval = fmax(eps,eval);
                     push_rho[i*n1+j] = rhovalue/eval;
 
@@ -759,7 +769,6 @@ public:
 
     double compute_barenblatt_solution_error(Helper_E& helper_f, Barenblatt& solution, const double* phi, const int outer_iter){
         // Compare with actual solution
-        solution.calc_solution_at_n(outer_iter+1);
 
         helper_f.calculate_DEstar_normalized(phi);
 
@@ -789,6 +798,12 @@ public:
         int skip = 10; // frequency of printout
 
         double error_mu,error_nu,error=1.0;
+
+        /*
+            Compute the actual Barenblatt solution
+        */
+
+        solution.calc_solution_at_n(outer_iter+1);
 
         /*
             Initialize coefficients for siga update
@@ -865,8 +880,10 @@ public:
 
             sigma_forth = 1;
             sigma_back  = 1;
+            
             error_mu = perform_OT_iteration_forth_det(helper_f,sigma_forth,W2_value,mu);
             error_nu = perform_OT_iteration_back_det(helper_f,sigma_back,W2_value,mu);
+            
 
             /*
                 Display the result per iterations
@@ -877,13 +894,13 @@ public:
             if(iter%skip==skip-1){
                 cout<<"|";
                 /* Compare with actual solution */
-                // solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
+                solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
                 display_iteration(iter,W2_value,error_mu,error_nu,solution_error,C_phi,C_psi);
                 cout << "infgradphi : " << infgradphi << " c1 : " << phi_c1 << " " << psi_c1 << "\n";
 
-                // string figurename = "output";
-                // for(int i=0;i<n1*n2;++i) push_mu[i] = fabs(push_mu[i] - mu[i]);
-                // init.save_image_opencv(push_mu,figurename,(iter+1)/skip, mu_max);
+                string figurename = "output";
+                for(int i=0;i<n1*n2;++i) push_mu[i] = fabs(push_mu[i] - mu[i]);
+                init.save_image_opencv(push_mu,figurename,(iter+1)/skip, mu_max);
             }
 
             /* 
@@ -972,7 +989,7 @@ int main(int argc, char** argv){
     create_bin_file(mu,n1*n2,filename);
 
     string figurename = "barenblatt";
-    // init.save_image_opencv(mu,figurename,0);
+    init.save_image_opencv(mu,figurename,0);
 
     clock_t time;
     time=clock();
@@ -997,7 +1014,7 @@ int main(int argc, char** argv){
 
         sum_solution += solution_error;
 
-        // init.save_image_opencv(mu,figurename,n+1);
+        init.save_image_opencv(mu,figurename,n+1);
     }
 
     time=clock()-time;
