@@ -831,11 +831,6 @@ public:
 
             phi_c2 = 1;
             psi_c2 = 1;
-
-
-            // C_phi = 0.5;
-            // C_psi = 0.5;
-            
         }
 
         double solution_error = 1;
@@ -853,15 +848,13 @@ public:
                         
             error=fmin(error_mu,error_nu);
 
-            if(iter % 1 == 0){
+            if(iter % 10 == 0){
                 lambda = calculate_lambda();
                 infgradphi = calculate_infgradphi_on_level_set(lambda);
                 calculate_d1_d2(d1, d2, lambda, infgradphi);
 
                 // C_phi = fmax(0.15,fmin(0.3,C_phi/sigma_forth));
                 // C_psi = fmax(0.15,fmin(0.3,C_psi/sigma_back));
-                C_phi = 0.15;
-                C_psi = 0.15;
                 set_coeff(phi_c1, phi_c2, C_phi, mu_max, d1, d2, false);
                 set_coeff(psi_c1, psi_c2, C_psi, mu_max, d1, d2, false);
             }
@@ -914,9 +907,9 @@ public:
 }; // Back and Forth
 
 int main(int argc, char** argv){
-    if(argc!=8){
+    if(argc!=9){
         cout<<"Do the following:"<<endl;
-        cout<<"./gf [n1] [n2] [max_iteration] [tolerance] [nt] [tau] [m]"<<endl;
+        cout<<"./gf [n1] [n2] [max_iteration] [tolerance] [nt] [tau] [m] [C trace]"<<endl;
         return 0;
     }
 
@@ -927,6 +920,7 @@ int main(int argc, char** argv){
     int nt=stoi(argv[5]);
     double tau=stod(argv[6]);
     double m=stod(argv[7]);
+    double C=stod(argv[8]);
 
     double M = 1.0; // initial mass
 
@@ -970,6 +964,9 @@ int main(int argc, char** argv){
     cout << setprecision(6);
 
     BackAndForth bf(n1,n2,max_iteration,tolerance,gamma,tau,m);
+
+    bf.C_phi = C;
+    bf.C_psi = C;
 
     string filename="./data/mu-"+to_string(0)+".csv";
     create_bin_file(mu,n1*n2,filename);
