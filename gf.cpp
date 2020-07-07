@@ -438,7 +438,7 @@ public:
 
     void calculate_push_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxtmp,const double* vytmp){
 
-        double eps = 1e-6;
+        double eps = pow(1.0/n1, 0.25);
 
         double xpost,ypost,xpre,ypre;
 
@@ -483,12 +483,15 @@ public:
                     // double gradx_vx = 1.0*n1* (3.0/4.0 * (vxval_post_1 - vxval_pre_1) - 3.0/20.0 * (vxval_post_2 - vxval_pre_2) + 1.0/60.0 * (vxval_post_3 - vxval_pre_3));
                     // double grady_vy = 1.0*n2* (3.0/4.0 * (vyval_post_1 - vyval_pre_1) - 3.0/20.0 * (vyval_post_2 - vyval_pre_2) + 1.0/60.0 * (vyval_post_3 - vyval_pre_3));
 
+                    // double gradx_vx = 1.0*n1* (3.0/4.0 * (vxval_post_1 - vxval_pre_1) - 3.0/20.0 * (vxval_post_2 - vxval_pre_2) );
+                    // double grady_vy = 1.0*n2* (3.0/4.0 * (vyval_post_1 - vyval_pre_1) - 3.0/20.0 * (vyval_post_2 - vyval_pre_2) );
+
                     double gradx_vx = 1.0*n1* (0.5 * (vxval_post_1 - vxval_pre_1));
                     double grady_vy = 1.0*n2* (0.5 * (vyval_post_1 - vyval_pre_1));
 
                     // push_rho[i*n1+j]=rhovalue/fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy)); 
                     double eval = fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy));
-                    eval = fmax(sqrt(1.0/n1),eval);
+                    eval = fmax(eps,eval);
                     push_rho[i*n1+j] = rhovalue/eval;
 
 
@@ -678,12 +681,12 @@ public:
         return error_mu;
     }
 
-// display_iteration(iter,W2_value,error_mu,error_nu,solution_error);
+// display_iteration(iter,W2_value,error_mu,error_nu,solution_error,C_phi,C_psi);
 
-    void display_iteration(const int iter,const double W2_value,const double error_mu,const double error_nu,const double solution_error) const{
+    void display_iteration(const int iter,const double W2_value,const double error_mu,const double error_nu,const double solution_error, const double C_phi, const double C_psi) const{
         cout << setprecision(6);
         cout << fixed;
-        cout <<setw(5)<<iter+1 << " coeff : " << setw(10) << phi_c2/phi_c1 << " " << setw(6) << psi_c2/psi_c1 << "  W2 : " << scientific << setw(13) << W2_value << "  h-1 : "<<scientific<<setw(13) << error_mu << " " << error_nu << " solution_error : " << solution_error <<endl;
+        cout <<setw(5)<<iter+1 << " C : " << C_phi << " " << C_psi << " coeff : " << setw(10) << phi_c2/phi_c1 << " " << setw(6) << psi_c2/psi_c1 << "  W2 : " << scientific << setw(13) << W2_value << "  h-1 : "<<scientific<<setw(13) << error_mu << " " << error_nu << " solution_error : " << solution_error <<endl;
     }
 
     /**
@@ -793,8 +796,8 @@ public:
 
         beta_1 =0.1;
         beta_2 =0.9;
-        alpha_1=1.05;
-        alpha_2=0.95;
+        alpha_1=1.1;
+        alpha_2=0.9;
 
         /*
             Initialize the tolerance based on tau^2
@@ -812,29 +815,27 @@ public:
 
         double lambda = 1;
         double infgradphi  = 1;
-        double sigma_forth = 0.05;
-        double sigma_back  = 0.05;
+        double sigma_forth = 1;
+        double sigma_back  = 1;
 
         double d1 = 1;
         double d2 = 1;
 
-        C_phi = 1;
-        C_psi = 1;
+        
+        
 
         if(outer_iter==0){
-            // initialize_phi(helper_f,mu); // intiailize phi in the first outer iteration
+            initialize_phi(helper_f,mu); // intiailize phi in the first outer iteration
             phi_c1 = 100;
             psi_c1 = 100;
 
             phi_c2 = 1;
             psi_c2 = 1;
+
+
+            // C_phi = 0.5;
+            // C_psi = 0.5;
             
-        }else{
-            lambda = calculate_lambda();
-            infgradphi = calculate_infgradphi_on_level_set(lambda);
-            calculate_d1_d2(d1, d2, lambda, infgradphi);
-            set_coeff(phi_c1, phi_c2, C_phi, mu_max, d1, d2, true);
-            set_coeff(psi_c1, psi_c2, C_psi, mu_max, d1, d2, true);
         }
 
         double solution_error = 1;
@@ -844,7 +845,26 @@ public:
         */
     
 
-        for(int iter=0;iter<max_iteration;++iter){
+        for(int iter=0;iter<max_iteration;++iter){            
+            
+            /* 
+                Calculating the relative error
+            */
+                        
+            error=fmin(error_mu,error_nu);
+
+            if(iter % 1 == 0){
+                lambda = calculate_lambda();
+                infgradphi = calculate_infgradphi_on_level_set(lambda);
+                calculate_d1_d2(d1, d2, lambda, infgradphi);
+
+                // C_phi = fmax(0.15,fmin(0.3,C_phi/sigma_forth));
+                // C_psi = fmax(0.15,fmin(0.3,C_psi/sigma_back));
+                C_phi = 0.15;
+                C_psi = 0.15;
+                set_coeff(phi_c1, phi_c2, C_phi, mu_max, d1, d2, false);
+                set_coeff(psi_c1, psi_c2, C_psi, mu_max, d1, d2, false);
+            }
 
             /*
                 Determinant version pushforward
@@ -854,25 +874,6 @@ public:
             sigma_back  = 1;
             error_mu = perform_OT_iteration_forth_det(helper_f,sigma_forth,W2_value,mu);
             error_nu = perform_OT_iteration_back_det(helper_f,sigma_back,W2_value,mu);
-            
-            /* 
-                Calculating the relative error
-            */
-                        
-            error=fmin(error_mu,error_nu);
-
-            if(iter % 5 == 0 && iter > 0){
-                lambda = calculate_lambda();
-                infgradphi = calculate_infgradphi_on_level_set(lambda);
-                calculate_d1_d2(d1, d2, lambda, infgradphi);
-
-                // C_phi = fmax(0.5,fmin(1,C_phi/sigma_forth));
-                // C_psi = fmax(0.5,fmin(1,C_psi/sigma_back));
-                C_phi = 0.3;
-                C_psi = 0.3;
-                set_coeff(phi_c1, phi_c2, C_phi, mu_max, d1, d2, false);
-                set_coeff(psi_c1, psi_c2, C_psi, mu_max, d1, d2, false);
-            }
 
             /*
                 Display the result per iterations
@@ -884,7 +885,7 @@ public:
                 cout<<"|";
                 /* Compare with actual solution */
                 // solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
-                display_iteration(iter,W2_value,error_mu,error_nu,solution_error);
+                display_iteration(iter,W2_value,error_mu,error_nu,solution_error,C_phi,C_psi);
                 cout << "infgradphi : " << infgradphi << " c1 : " << phi_c1 << " " << psi_c1 << "\n";
 
                 // string figurename = "output";
@@ -901,7 +902,7 @@ public:
                 cout<<"Tolerance met!"<<endl;
                 /* Compare with actual solution */
                 solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
-                display_iteration(iter,W2_value,error_mu,error_nu,solution_error);
+                display_iteration(iter,W2_value,error_mu,error_nu,solution_error,C_phi,C_psi);
                 break;
             }
         }
