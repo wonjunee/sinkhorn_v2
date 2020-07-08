@@ -441,7 +441,7 @@ public:
 
     void calculate_push_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy){
 
-        double eps = pow(1.0/n1, 0.2);
+        double eps = pow(1.0/n1, 0.5);
 
         double xpost,ypost,xpre,ypre;
 
@@ -463,10 +463,10 @@ public:
                     double vxy_val = interpolate_function(x,y,vxy);
 
                     // push_rho[i*n1+j]=rhovalue/fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy)); 
-                    double eval = fabs((1.0-tau*vxx_val) * (1.0-tau*vyy_val) - tau*tau * vxy_val * vxy_val);
-                    // double eval = fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy));
-                    eval = fmax(eps,eval);
-                    push_rho[i*n1+j] = rhovalue/eval;
+                    double det = fabs((1.0-tau*vxx_val) * (1.0-tau*vyy_val) - tau*tau * vxy_val * vxy_val);
+                    // double det = fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy));
+                    det = fmax(eps,det);
+                    push_rho[i*n1+j] = rhovalue/det;
 
 
                 ////////////////////////////////////
@@ -586,42 +586,25 @@ public:
         return 1;
     }
 
-    void calculate_gradient_vxx(const double* phi, double* vxx){
+    void calculate_gradient_vxx_vyy_vxy(const double* phi, double* vxx, double* vyy, double* vxy){
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
-                int jpp = (int)fmin(n1-1,j+2);
-                // int jp  = (int)fmin(n1-1,j+1);
-                // int jm  = (int)fmax(0,j-1);
-                int jmm = (int)fmax(0,j-2);
-                vxx[i*n1+j] = 0.25*n1*n1* (phi[i*n1+jpp] - 2.*phi[i*n1+j] + phi[i*n1+jmm]);
-            }
-        }
-    }
+                int jpp = fmin(n1-1,j+2);
+                int jp  = fmin(n1-1,j+1);
+                int jm  = fmax(0,j-1);
+                int jmm = fmax(0,j-2);
 
-    void calculate_gradient_vyy(const double* phi, double* vyy){
-        for(int i=0;i<n2;++i){
-            for(int j=0;j<n1;++j){
                 int ipp = fmin(n2-1,i+2);
-                // int ip  = fmin(n2-1,i+1);
-                // int im  = fmax(0,i-1);
-                int imm  = fmax(0,i-2);
-                vyy[i*n1+j] = 0.25*n2*n2* (phi[ipp*n1+j] - 2.*phi[i*n1+j] + phi[imm*n1+j]);
-            }
-        }
-    }
-
-    void calculate_gradient_vxy(const double* phi, double* vxy){
-        for(int i=0;i<n2;++i){
-            for(int j=0;j<n1;++j){
                 int ip  = fmin(n2-1,i+1);
                 int im  = fmax(0,i-1);
-                int jp  = (int)fmin(n1-1,j+1);
-                int jm  = (int)fmax(0,j-1);
+                int imm  = fmax(0,i-2);
+
+                vxx[i*n1+j] = 0.25*n1*n1* (phi[i*n1+jpp] - 2.*phi[i*n1+j] + phi[i*n1+jmm]);
+                vyy[i*n1+j] = 0.25*n2*n2* (phi[ipp*n1+j] - 2.*phi[i*n1+j] + phi[imm*n1+j]);
                 vxy[i*n1+j] = 0.25*n1*n2* (phi[ip*n1+jp] - phi[ip*n1+jm] - phi[im*n1+jp] + phi[im*n1+jm]);
             }
         }
     }
-
 
     double perform_OT_iteration_back_det(Helper_E& helper_f,double& sigma,double& W2_value,const double* mu){
         // ------------------------------------------------------------
@@ -634,9 +617,7 @@ public:
         // helper_f.calculate_DEstar_normalized(phi);
 
         calculate_gradient(psi, vx, vy);
-        calculate_gradient_vxx(phi, vxx);
-        calculate_gradient_vyy(phi, vyy);
-        calculate_gradient_vxy(phi, vxy);
+        calculate_gradient_vxx_vyy_vxy(phi, vxx, vyy, vxy);
         calculate_push_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy);
 
         fftps->perform_inverse_laplacian(push_mu,mu,psi_c1,psi_c2,sigma);
@@ -666,9 +647,7 @@ public:
         flt2d->find_c_concave(psi,phi,tau);
             
         calculate_gradient(phi, vx, vy);
-        calculate_gradient_vxx(psi, vxx);
-        calculate_gradient_vyy(psi, vyy);
-        calculate_gradient_vxy(psi, vxy);
+        calculate_gradient_vxx_vyy_vxy(psi, vxx, vyy, vxy);
         calculate_push_rho(mu, push_mu,vx,vy,vxx,vyy,vxy);
         
         helper_f.calculate_DEstar(phi);
@@ -707,13 +686,13 @@ public:
         Calculate a = 0.1 * max(-phi)
     */
     double calculate_lambda() const{
-        double phimax = 0;
+        double phimax = 0.1;
         
         for(int i=0;i<n1*n2;++i){
             phimax = fmax(phimax,-phi[i]);
         }
-        if(phimax > 5) return 2;
-        return phimax * 0.2;
+        if(phimax > 2) return 1;
+        return fmin(2,phimax * 0.5);
     }
 
     /**
@@ -760,9 +739,9 @@ public:
         }
     }
 
-    void set_coeff(double& c1, double& c2, const double C, const double mu_max, const double d1, const double d2, const bool verbose){
+    void set_coeff(double& c1, double& c2, const double C, const double mu_max, const double d1, const double d2, const bool verbose, const double C_tr){
         c1 = C * d1 + d2;
-        c2 = C * d1 + tau * mu_max;
+        c2 = C * d1 + C_tr * tau * mu_max;
     }
 
     void initialize_phi(Helper_E& helper_f,const double* mu){
@@ -797,6 +776,27 @@ public:
         d2 = eval / lambda * (mprime - 1);
     }
 
+    void calculate_trace_constant(double& C){
+
+        C = 0;
+        for(int i=0;i<n2;++i){
+            for(int j=0;j<n1;++j){
+                /* calculate eigen values */
+
+                /* calculate trace */
+                double trace = fabs(2 - tau*vxx[i*n1+j] - tau*vyy[i*n1+j]);
+                /* calculate det */
+                double det = fabs((1.0-tau*vxx[i*n1+j]) * (1.0-tau*vyy[i*n1+j]) - tau*tau * vxy[i*n1+j] * vxy[i*n1+j]);
+
+
+                double t1 = 0.5 * fabs(tau + sqrt(fabs(tau*tau - 4 * det)));
+                double t2 = 0.5 * fabs(tau - sqrt(fabs(tau*tau - 4 * det)));
+
+                C = fmax(C, fmax(t1,t2));
+            }
+        }
+    }
+
     double start_OT(Helper_E& helper_f, const double* mu, Barenblatt& solution, const int outer_iter, Initializer& init){
 
         int skip = 10; // frequency of printout
@@ -824,7 +824,7 @@ public:
 
         double mu_max = 1;
         for(int i=0;i<n1*n2;++i) mu_max = fmax(mu_max, mu[i]);
-        double tol_modified = tolerance * mu_max *tau*tau;
+        double tol_modified = tolerance * pow(mu_max,m-1) *tau*tau;
 
         cout << "Iter : " << outer_iter + 1 << " Tolerance : " << tol_modified << "\n";
 
@@ -839,6 +839,8 @@ public:
 
         double d1 = 1;
         double d2 = 1;
+
+        double C_tr = 1;
 
         
         
@@ -871,11 +873,12 @@ public:
                 lambda = calculate_lambda();
                 infgradphi = calculate_infgradphi_on_level_set(lambda);
                 calculate_d1_d2(d1, d2, lambda, infgradphi);
+                calculate_trace_constant(C_tr);
 
                 // C_phi = fmax(0.15,fmin(0.3,C_phi/sigma_forth));
                 // C_psi = fmax(0.15,fmin(0.3,C_psi/sigma_back));
-                set_coeff(phi_c1, phi_c2, C_phi, mu_max, d1, d2, false);
-                set_coeff(psi_c1, psi_c2, C_psi, mu_max, d1, d2, false);
+                set_coeff(phi_c1, phi_c2, C_phi, mu_max, d1, d2, false, C_tr);
+                set_coeff(psi_c1, psi_c2, C_psi, mu_max, d1, d2, false, C_tr);
             }
 
             /*
