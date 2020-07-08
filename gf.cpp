@@ -441,7 +441,7 @@ public:
 
     void calculate_push_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy){
 
-        double eps = pow(1.0/n1, 0.5);
+        double eps = pow(1.0/n1, 0.4);
 
         double xpost,ypost,xpre,ypre;
 
@@ -739,9 +739,9 @@ public:
         }
     }
 
-    void set_coeff(double& c1, double& c2, const double C, const double mu_max, const double d1, const double d2, const bool verbose, const double C_tr){
+    void set_coeff(double& c1, double& c2, const double C, const double mu_max, const double d1, const double d2, const double d3, const bool verbose, const double C_tr){
         c1 = C * d1 + d2;
-        c2 = C * d1 + C_tr * tau * mu_max;
+        c2 = C * d1 + C_tr * tau;
     }
 
     void initialize_phi(Helper_E& helper_f,const double* mu){
@@ -756,14 +756,12 @@ public:
         helper_f.calculate_DEstar_normalized(phi);
 
         double sum=0;
-        for(int i=0;i<n1*n2;++i){
-            sum += fabs(solution.sol[i] - helper_f.DEstar[i]);
-        }
+        for(int i=0;i<n1*n2;++i) sum += fabs(solution.sol[i] - helper_f.DEstar[i]);
 
         return sum/(1.0*n1*n2);
     }
 
-    void calculate_d1_d2(double& d1, double& d2, const double lambda, const double infgradphi){
+    void calculate_d1_d2_d3(double& d1, double& d2, double& d3, const double lambda, const double infgradphi){
         double area = 0;
         for(int i=0;i<n1*n2;++i){
             if(-phi[i] > lambda){
@@ -771,14 +769,18 @@ public:
             }
         }
         area /= n1*n2;
-        double eval = pow(lambda / gamma, mprime - 1);
-        d1 = eval / infgradphi;
-        d2 = eval / lambda * (mprime - 1);
+        double eval = 1.0 / pow(gamma, mprime - 1);
+        d1 = eval * pow(lambda, mprime-1) / infgradphi;
+        d2 = eval * pow(lambda, mprime-2) * (mprime - 1) * area;
+        // d3 = eval / infgradphi;
     }
 
-    void calculate_trace_constant(double& C){
+    void calculate_trace_constant(double& C, const double* mu){
 
         C = 0;
+
+        calculate_gradient(phi, vx, vy);
+
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
                 /* calculate eigen values */
@@ -786,13 +788,17 @@ public:
                 /* calculate trace */
                 double trace = fabs(2 - tau*vxx[i*n1+j] - tau*vyy[i*n1+j]);
                 /* calculate det */
-                double det = fabs((1.0-tau*vxx[i*n1+j]) * (1.0-tau*vyy[i*n1+j]) - tau*tau * vxy[i*n1+j] * vxy[i*n1+j]);
+                double det   = fabs((1.0-tau*vxx[i*n1+j]) * (1.0-tau*vyy[i*n1+j]) - tau*tau * vxy[i*n1+j] * vxy[i*n1+j]);
 
 
                 double t1 = 0.5 * fabs(tau + sqrt(fabs(tau*tau - 4 * det)));
                 double t2 = 0.5 * fabs(tau - sqrt(fabs(tau*tau - 4 * det)));
 
-                C = fmax(C, fmax(t1,t2));
+                double x = (j+0.5)/n1 - tau * vx[i*n1+j];
+                double y = (i+0.5)/n2 - tau * vy[i*n1+j];
+
+                double mu_val = interpolate_function(x,y,mu);
+                C = fmax(C, mu_val * fmax(t1,t2));
             }
         }
     }
@@ -824,7 +830,7 @@ public:
 
         double mu_max = 1;
         for(int i=0;i<n1*n2;++i) mu_max = fmax(mu_max, mu[i]);
-        double tol_modified = tolerance * pow(mu_max,m-1) *tau*tau;
+        double tol_modified = tolerance * mu_max *tau*tau;
 
         cout << "Iter : " << outer_iter + 1 << " Tolerance : " << tol_modified << "\n";
 
@@ -839,6 +845,7 @@ public:
 
         double d1 = 1;
         double d2 = 1;
+        double d3 = 1;
 
         double C_tr = 1;
 
@@ -869,16 +876,16 @@ public:
                         
             error=fmin(error_mu,error_nu);
 
-            if(iter % 10 == 0){
+            if(iter % 1 == 0){
                 lambda = calculate_lambda();
                 infgradphi = calculate_infgradphi_on_level_set(lambda);
-                calculate_d1_d2(d1, d2, lambda, infgradphi);
-                calculate_trace_constant(C_tr);
+                calculate_d1_d2_d3(d1, d2, d3, lambda, infgradphi);
+                calculate_trace_constant(C_tr, mu);
 
                 // C_phi = fmax(0.15,fmin(0.3,C_phi/sigma_forth));
                 // C_psi = fmax(0.15,fmin(0.3,C_psi/sigma_back));
-                set_coeff(phi_c1, phi_c2, C_phi, mu_max, d1, d2, false, C_tr);
-                set_coeff(psi_c1, psi_c2, C_psi, mu_max, d1, d2, false, C_tr);
+                set_coeff(phi_c1, phi_c2, C_phi, mu_max, d1, d2, d3, false, C_tr);
+                set_coeff(psi_c1, psi_c2, C_psi, mu_max, d1, d2, d3, false, C_tr);
             }
 
             /*
@@ -901,7 +908,7 @@ public:
             if(iter%skip==skip-1){
                 cout<<"|";
                 /* Compare with actual solution */
-                solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
+                // solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
                 display_iteration(iter,W2_value,error_mu,error_nu,solution_error,C_phi,C_psi);
                 cout << "infgradphi : " << infgradphi << " c1 : " << phi_c1 << " " << psi_c1 << "\n";
 
