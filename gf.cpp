@@ -169,8 +169,9 @@ public:
     double* vx;
     double* vy;
 
-    double* vxtmp;
-    double* vytmp;
+    double* vxx;
+    double* vyy;
+    double* vxy;
 
     // Initialize phi and psi
     double* phi;
@@ -199,8 +200,9 @@ public:
         vx=new double[n1*n2];
         vy=new double[n1*n2];
 
-        vxtmp=new double[n1*n2];
-        vytmp=new double[n1*n2];
+        vxx=new double[n1*n2];
+        vyy=new double[n1*n2];
+        vxy=new double[n1*n2];
 
         phi=new double[n1*n2];
         psi=new double[n1*n2];
@@ -221,8 +223,9 @@ public:
     ~BackAndForth(){
         delete[] vx;
         delete[] vy;
-        delete[] vxtmp;
-        delete[] vytmp;
+        delete[] vxx;
+        delete[] vyy;
+        delete[] vxy;
         delete[] phi;
         delete[] psi;
         delete[] push_mu;
@@ -436,9 +439,9 @@ public:
         return tau/sigma;
     }
 
-    void calculate_push_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxtmp,const double* vytmp){
+    void calculate_push_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy){
 
-        double eps = pow(1.0/n1, 0.4);
+        double eps = pow(1.0/n1, 0.2);
 
         double xpost,ypost,xpre,ypre;
 
@@ -454,52 +457,13 @@ public:
                 double rhovalue=interpolate_function(x,y,rho);
 
                 if(rhovalue>0){
-                    xpre = x - 1.0/n1;
-                    ypre = y - 1.0/n2;
-                    double vxval_pre_x_1 = interpolate_function_v(xpre,y,vxtmp);
-                    double vyval_pre_y_1 = interpolate_function_v(x,ypre,vytmp);
 
-                    double vxval_pre_y_1 = interpolate_function_v(x,ypre,vxtmp);
-                    double vyval_pre_x_1 = interpolate_function_v(xpre,y,vytmp);
-                    // xpre = x - 2.0/n1;
-                    // ypre = y - 2.0/n2;
-                    // double vxval_pre_2 = interpolate_function_v(xpre,y,vxtmp);
-                    // double vyval_pre_2 = interpolate_function_v(x,ypre,vytmp);
-                    // xpre = x - 3.0/n1;
-                    // ypre = y - 3.0/n2;
-                    // double vxval_pre_3 = interpolate_function_v(xpre,y,vxtmp);
-                    // double vyval_pre_3 = interpolate_function_v(x,ypre,vytmp);
-
-                    xpost = x + 1.0/n1;
-                    ypost = y + 1.0/n2;
-                    double vxval_post_x_1 = interpolate_function_v(xpost,y,vxtmp);
-                    double vyval_post_y_1 = interpolate_function_v(x,ypost,vytmp);
-
-                    double vxval_post_y_1 = interpolate_function_v(x,ypost,vxtmp);
-                    double vyval_post_x_1 = interpolate_function_v(xpost,y,vytmp);
-                    // xpost = x + 2.0/n1;
-                    // ypost = y + 2.0/n2;
-                    // double vxval_post_2 = interpolate_function_v(xpost,y,vxtmp);
-                    // double vyval_post_2 = interpolate_function_v(x,ypost,vytmp);
-                    // xpost = x + 3.0/n1;
-                    // ypost = y + 3.0/n2;
-                    // double vxval_post_3 = interpolate_function_v(xpost,y,vxtmp);
-                    // double vyval_post_3 = interpolate_function_v(x,ypost,vytmp);
-
-                    // double gradx_vx = 1.0*n1* (3.0/4.0 * (vxval_post_x_1 - vxval_pre_x_1) - 3.0/20.0 * (vxval_post_2 - vxval_pre_2) + 1.0/60.0 * (vxval_post_3 - vxval_pre_3));
-                    // double grady_vy = 1.0*n2* (3.0/4.0 * (vyval_post_y_1 - vyval_pre_y_1) - 3.0/20.0 * (vyval_post_2 - vyval_pre_2) + 1.0/60.0 * (vyval_post_3 - vyval_pre_3));
-
-                    // double gradx_vx = 1.0*n1* (3.0/4.0 * (vxval_post_x_1 - vxval_pre_x_1) - 3.0/20.0 * (vxval_post_2 - vxval_pre_2) );
-                    // double grady_vy = 1.0*n2* (3.0/4.0 * (vyval_post_y_1 - vyval_pre_y_1) - 3.0/20.0 * (vyval_post_2 - vyval_pre_2) );
-
-                    double gradx_vx = 1.0*n1* (0.5 * (vxval_post_x_1 - vxval_pre_x_1));
-                    double grady_vy = 1.0*n2* (0.5 * (vyval_post_y_1 - vyval_pre_y_1));
-
-                    double grady_vx = 1.0*n1* (0.5 * (vxval_post_y_1 - vxval_pre_y_1));
-                    double gradx_vy = 1.0*n1* (0.5 * (vyval_post_x_1 - vyval_pre_x_1));
+                    double vxx_val = interpolate_function(x,y,vxx);
+                    double vyy_val = interpolate_function(x,y,vyy);
+                    double vxy_val = interpolate_function(x,y,vxy);
 
                     // push_rho[i*n1+j]=rhovalue/fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy)); 
-                    double eval = fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy) - tau*tau * grady_vx * gradx_vy);
+                    double eval = fabs((1.0-tau*vxx_val) * (1.0-tau*vyy_val) - tau*tau * vxy_val * vxy_val);
                     // double eval = fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy));
                     eval = fmax(eps,eval);
                     push_rho[i*n1+j] = rhovalue/eval;
@@ -622,6 +586,30 @@ public:
         return 1;
     }
 
+    void calculate_gradient_vxx(const double* phi, double* vxx){
+        for(int i=0;i<n2;++i){
+            for(int j=0;j<n1;++j){
+                vxx[i*n1+j] = 1.0*n1*n1* (phi[i*n1+(int)fmin(n1-1,j+1)] - 2.*phi[i*n1+j] + phi[i*n1+(int)fmax(0,j-1)]);
+            }
+        }
+    }
+
+    void calculate_gradient_vyy(const double* phi, double* vyy){
+        for(int i=0;i<n2;++i){
+            for(int j=0;j<n1;++j){
+                vyy[i*n1+j] = 1.0*n2*n2* (phi[(int)fmin(n2-1,i+1)*n1+j] - 2.*phi[i*n1+j] + phi[(int)fmax(0,i-1)*n1+j]);
+            }
+        }
+    }
+
+    void calculate_gradient_vxy(const double* phi, double* vxy){
+        for(int i=0;i<n2;++i){
+            for(int j=0;j<n1;++j){
+                vxy[i*n1+j] = 1.0*n1*n2* (phi[i*n1+(int)fmin(n1-1,j+1)] - phi[i*n1+j] - phi[(int)fmax(0,i-1)*n1+(int)fmin(n1-1,j+1)] +phi[(int)fmax(0,i-1)*n1+j]);
+            }
+        }
+    }
+
 
     double perform_OT_iteration_back_det(Helper_E& helper_f,double& sigma,double& W2_value,const double* mu){
         // ------------------------------------------------------------
@@ -634,8 +622,10 @@ public:
         // helper_f.calculate_DEstar_normalized(phi);
 
         calculate_gradient(psi, vx, vy);
-        calculate_gradient(phi, vxtmp, vytmp);
-        calculate_push_rho(helper_f.DEstar, push_mu,vx,vy,vxtmp,vytmp);
+        calculate_gradient_vxx(phi, vxx);
+        calculate_gradient_vyy(phi, vyy);
+        calculate_gradient_vxy(phi, vxy);
+        calculate_push_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy);
 
         fftps->perform_inverse_laplacian(push_mu,mu,psi_c1,psi_c2,sigma);
 
@@ -664,8 +654,10 @@ public:
         flt2d->find_c_concave(psi,phi,tau);
             
         calculate_gradient(phi, vx, vy);
-        calculate_gradient(psi, vxtmp, vytmp);
-        calculate_push_rho(mu, push_mu,vx,vy,vxtmp,vytmp);
+        calculate_gradient_vxx(psi, vxx);
+        calculate_gradient_vyy(psi, vyy);
+        calculate_gradient_vxy(psi, vxy);
+        calculate_push_rho(mu, push_mu,vx,vy,vxx,vyy,vxy);
         
         helper_f.calculate_DEstar(phi);
         // helper_f.calculate_DEstar_normalized(phi);
