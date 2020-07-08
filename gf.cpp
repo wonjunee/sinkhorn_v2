@@ -593,7 +593,7 @@ public:
                 // int jp  = (int)fmin(n1-1,j+1);
                 // int jm  = (int)fmax(0,j-1);
                 int jmm = (int)fmax(0,j-2);
-                vxx[i*n1+j] = 0.25*n1*n1* (phi[i*n1+jpp] - phi[i*n1+j] - phi[i*n1+j] + phi[i*n1+jmm]);
+                vxx[i*n1+j] = 0.25*n1*n1* (phi[i*n1+jpp] - 2.*phi[i*n1+j] + phi[i*n1+jmm]);
             }
         }
     }
@@ -605,7 +605,7 @@ public:
                 // int ip  = fmin(n2-1,i+1);
                 // int im  = fmax(0,i-1);
                 int imm  = fmax(0,i-2);
-                vyy[i*n1+j] = 0.25*n2*n2* (phi[ipp*n1+j] - phi[i*n1+j] - phi[i*n1+j] + phi[imm*n1+j]);
+                vyy[i*n1+j] = 0.25*n2*n2* (phi[ipp*n1+j] - 2.*phi[i*n1+j] + phi[imm*n1+j]);
             }
         }
     }
@@ -617,7 +617,7 @@ public:
                 int im  = fmax(0,i-1);
                 int jp  = (int)fmin(n1-1,j+1);
                 int jm  = (int)fmax(0,j-1);
-                vxy[i*n1+j] = 0.25*n1*n2* (phi[ip*n1+jp] - phi[ip*n1+jm] - phi[im*n1+jp] +phi[im*n1+jm]);
+                vxy[i*n1+j] = 0.25*n1*n2* (phi[ip*n1+jp] - phi[ip*n1+jm] - phi[im*n1+jp] + phi[im*n1+jm]);
             }
         }
     }
