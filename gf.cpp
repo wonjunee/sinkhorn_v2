@@ -589,7 +589,10 @@ public:
     void calculate_gradient_vxx(const double* phi, double* vxx){
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
-                vxx[i*n1+j] = 1.0*n1*n1* (phi[i*n1+(int)fmin(n1-1,j+1)] - 2.*phi[i*n1+j] + phi[i*n1+(int)fmax(0,j-1)]);
+                int jpp = (int)fmin(n1-1,j+2);
+                int jp  = (int)fmin(n1-1,j+1);
+                int jm  = (int)fmax(0,j-1);
+                vxx[i*n1+j] = 0.25*n1*n1* (phi[i*n1+jpp] - phi[i*n1+jp] - phi[i*n1+j] + phi[i*n1+jm]);
             }
         }
     }
@@ -597,7 +600,10 @@ public:
     void calculate_gradient_vyy(const double* phi, double* vyy){
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
-                vyy[i*n1+j] = 1.0*n2*n2* (phi[(int)fmin(n2-1,i+1)*n1+j] - 2.*phi[i*n1+j] + phi[(int)fmax(0,i-1)*n1+j]);
+                int ipp = fmin(n2-1,i+2);
+                int ip  = fmin(n2-1,i+1);
+                int im  = fmax(0,i-1);
+                vyy[i*n1+j] = 0.25*n2*n2* (phi[ipp*n1+j] - phi[ip*n1+j] - phi[i*n1+j] + phi[im*n1+j]);
             }
         }
     }
