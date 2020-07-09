@@ -383,14 +383,23 @@ public:
 
     void calculate_gradient(const double* phi_c, double* vx, double* vy){
 
+        /* forward difference */
+        // for(int i=0;i<n2;++i){
+        //     for(int j=0;j<n1-1;++j){
+        //         vx[i*n1+j]=1.0*n1*(phi_c[i*n1+j+1]-phi_c[i*n1+j]);
+        //     }
+        // }
+        // for(int j=0;j<n1;++j){
+        //     for(int i=0;i<n2-1;++i){
+        //         vy[i*n1+j]=1.0*n2*(phi_c[(i+1)*n1+j]-phi_c[i*n1+j]);
+        //     }
+        // }
+
+        /* centered difference*/
         for(int i=0;i<n2;++i){
-            for(int j=0;j<n1-1;++j){
-                vx[i*n1+j]=1.0*n1*(phi_c[i*n1+j+1]-phi_c[i*n1+j]);
-            }
-        }
-        for(int j=0;j<n1;++j){
-            for(int i=0;i<n2-1;++i){
-                vy[i*n1+j]=1.0*n2*(phi_c[(i+1)*n1+j]-phi_c[i*n1+j]);
+            for(int j=0;j<n1;++j){
+                vx[i*n1+j]=0.5*n1*(phi_c[i*n1+(int)fmin(n1-1,j+1)]-phi_c[i*n1+(int)fmax(0,j-1)]);
+                vy[i*n1+j]=0.5*n2*(phi_c[(int)fmin(n2-1,i+1)*n1+j]-phi_c[(int)fmax(0,i-1)*n1+j]);
             }
         }
     }
@@ -908,7 +917,7 @@ public:
             if(iter%skip==skip-1){
                 cout<<"|";
                 /* Compare with actual solution */
-                // solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
+                solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
                 display_iteration(iter,W2_value,error_mu,error_nu,solution_error,C_phi,C_psi);
                 cout << "infgradphi : " << infgradphi << " c1 : " << phi_c1 << " " << psi_c1 << "\n";
 
@@ -953,7 +962,7 @@ int main(int argc, char** argv){
     double m=stod(argv[7]);
     double C=stod(argv[8]);
 
-    double M = 1.0; // initial mass
+    double M = 0.5; // initial mass
 
     Barenblatt solution(n1,n2,tau,m,M);
     solution.calc_solution_at_n(0);
