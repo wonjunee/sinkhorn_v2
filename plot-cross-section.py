@@ -197,7 +197,7 @@ def make_movie_3d(vmax, frames_dir, num_frames, n1, n2, M):
         # plt.suptitle("\ntau={}, gamma={}, t={:.3f}".format(tau,gamma,k*tau,L1_norm,L2_norm),fontsize=8)
         plt.suptitle("\ntau={}, gamma={}, t={:.5f}\n$\\||\\rho\\||_{{L^1}}$ = {:.5e}\t$\\||\\rho\\||_{{L^2}}$ = {:.5e}".format(tau,gamma,k*tau,L1_norm,L2_norm),fontsize=11)
 
-        filename='figures/figure-{:0>3d}.png'.format(k)
+        filename='figures/figure-{:0>3d}.eps'.format(k)
         plt.savefig(filename, dpi=dpi)
 
     print("")
@@ -218,12 +218,11 @@ if __name__ == "__main__":
         tau=float(F.readline())
         gamma=float(F.readline())
         m=float(F.readline())
+        M=float(F.readline())
 
 
     if len(sys.argv)==2:
         nt = int(sys.argv[1])
-
-    M = 1.0
 
     print(n1,n2,nt,tau,gamma,m,M)
 

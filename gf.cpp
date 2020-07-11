@@ -450,7 +450,7 @@ public:
 
     void calculate_push_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy){
 
-        double eps = pow(1.0/n1, 0.5);
+        double eps = pow(1.0/n1, 0.3);
 
         double xpost,ypost,xpre,ypre;
 
@@ -488,12 +488,41 @@ public:
                     // double gradx_vx=calculate_gradx_WENO_(vx, i, j);
                     // double grady_vy=calculate_grady_WENO_(vy, i, j);
                 ////////////////////////////////////
-                    // double gradx_vx=calculate_gradx_vx(vx, i, j);
-                    // double grady_vy=calculate_grady_vy(vy, i, j);
 
-                    // push_rho[i*n1+j]=rhovalue*fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy)); 
-                ////////////////////////////////////
+                    
+                }else{
+                    push_rho[i*n1+j]=0;
+                }
 
+            }
+        }
+    }
+
+        void calculate_pull_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy){
+
+        double eps = pow(1.0/n1, 0.5);
+
+        double xpost,ypost,xpre,ypre;
+
+        for(int i=0;i<n2;++i){
+            for(int j=0;j<n1;++j){
+
+                double vxval=vx[i*n1+j];
+                double vyval=vy[i*n1+j];
+
+                double x=(j+0.5)/(1.0*n1)-tau*vxval;
+                double y=(i+0.5)/(1.0*n2)-tau*vyval;
+
+                double rhovalue=interpolate_function(x,y,rho);
+
+                if(rhovalue>0){
+                    double vxx_val = vxx[i*n1+j];
+                    double vyy_val = vyy[i*n1+j];
+                    double vxy_val = vxy[i*n1+j];
+
+                    double det = fabs((1.0-tau*vxx_val) * (1.0-tau*vyy_val) - tau*tau * vxy_val * vxy_val);
+                    // det = fmin(1.0/eps, det);
+                    push_rho[i*n1+j] = rhovalue*det;
                     
                 }else{
                     push_rho[i*n1+j]=0;
@@ -626,8 +655,11 @@ public:
         // helper_f.calculate_DEstar_normalized(phi);
 
         calculate_gradient(psi, vx, vy);
-        calculate_gradient_vxx_vyy_vxy(phi, vxx, vyy, vxy);
-        calculate_push_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy);
+        // calculate_gradient_vxx_vyy_vxy(phi, vxx, vyy, vxy);
+        // calculate_push_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy);
+
+        calculate_gradient_vxx_vyy_vxy(psi, vxx, vyy, vxy);
+        calculate_pull_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy);
 
         fftps->perform_inverse_laplacian(push_mu,mu,psi_c1,psi_c2,sigma);
 
@@ -658,6 +690,9 @@ public:
         calculate_gradient(phi, vx, vy);
         calculate_gradient_vxx_vyy_vxy(psi, vxx, vyy, vxy);
         calculate_push_rho(mu, push_mu,vx,vy,vxx,vyy,vxy);
+
+        // calculate_gradient_vxx_vyy_vxy(phi, vxx, vyy, vxy);
+        // calculate_pull_rho(mu, push_mu,vx,vy,vxx,vyy,vxy);
         
         helper_f.calculate_DEstar(phi);
         // helper_f.calculate_DEstar_normalized(phi);
@@ -877,10 +912,14 @@ public:
             phi_c2 = 1;
             psi_c2 = 1;
 
-            // max_iteration_tmp = 60 ;
+            max_iteration_tmp = 200;
         }
 
         double solution_error = 1;
+
+        if(outer_iter > 15){
+            C_tr = 0.1;
+        }
         
         /*
             Starting the loop
@@ -892,7 +931,7 @@ public:
                 Calculating the relative error
             */
 
-            if(iter % 1 == 0 && iter > 0){
+            if(iter % 5 == 0 && iter > 0){
                 lambda = calculate_lambda();
                 infgradphi = calculate_infgradphi_on_level_set(lambda);
                 calculate_d1_d2_d3(d1, d2, d3, lambda, infgradphi);
@@ -925,7 +964,7 @@ public:
             if(iter%skip==skip-1){
                 cout<<"|";
                 /* Compare with actual solution */
-                // solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
+                solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
                 display_iteration(iter,W2_value,error_mu,error_nu,solution_error,C_phi,C_psi);
                 cout << "infgradphi : " << infgradphi << " c1 : " << phi_c1 << " " << psi_c1 << "\n";
 
@@ -957,9 +996,9 @@ public:
 }; // Back and Forth
 
 int main(int argc, char** argv){
-    if(argc!=9){
+    if(argc!=10){
         cout<<"Do the following:"<<endl;
-        cout<<"./gf [n1] [n2] [max_iteration] [tolerance] [nt] [tau] [m] [C trace]"<<endl;
+        cout<<"./gf [n1] [n2] [max_iteration] [tolerance] [nt] [tau] [m] [C trace] [opencv 0 or 1]"<<endl;
         return 0;
     }
 
@@ -971,6 +1010,7 @@ int main(int argc, char** argv){
     double tau=stod(argv[6]);
     double m=stod(argv[7]);
     double C=stod(argv[8]);
+    int plot=stoi(argv[9]);
 
     double M = 1.0; // initial mass
 
@@ -1022,7 +1062,8 @@ int main(int argc, char** argv){
     create_bin_file(mu,n1*n2,filename);
 
     string figurename = "barenblatt";
-    // init.save_image_opencv(mu,figurename,0);
+
+    if(plot > 0) init.save_image_opencv(mu,figurename,0);
 
     clock_t time;
     time=clock();
@@ -1047,7 +1088,7 @@ int main(int argc, char** argv){
 
         sum_solution += solution_error;
 
-        // init.save_image_opencv(mu,figurename,n+1);
+        if(plot > 0) init.save_image_opencv(mu,figurename,n+1);
     }
 
     time=clock()-time;
