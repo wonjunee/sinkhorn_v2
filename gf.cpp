@@ -450,7 +450,7 @@ public:
 
     void calculate_push_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy){
 
-        double eps = pow(1.0/n1, 0.4);
+        double eps = pow(1.0/n1, 0.5);
 
         double xpost,ypost,xpre,ypre;
 
@@ -792,31 +792,38 @@ public:
 
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
-                /* calculate eigen values */
-
-                /* calculate trace */
-                double trace = fabs(2 - tau*vxx[i*n1+j] - tau*vyy[i*n1+j]);
-                /* calculate det */
-                double det   = fabs((1.0-tau*vxx[i*n1+j]) * (1.0-tau*vyy[i*n1+j]) - tau*tau * vxy[i*n1+j] * vxy[i*n1+j]);
-
-
-                double t1 = 0.5 * fabs(tau + sqrt(fabs(tau*tau - 4 * det)));
-                double t2 = 0.5 * fabs(tau - sqrt(fabs(tau*tau - 4 * det)));
 
                 double x = (j+0.5)/n1 - tau * vx[i*n1+j];
                 double y = (i+0.5)/n2 - tau * vy[i*n1+j];
 
                 double mu_val = interpolate_function(x,y,mu);
-                C = fmax(C, mu_val * fmax(t1,t2));
+
+                if(mu_val > 0){
+                    /* calculate eigen values */
+
+                    /* calculate trace */
+                    double trace = fabs(2 - tau*vxx[i*n1+j] - tau*vyy[i*n1+j]);
+                    /* calculate det */
+                    double det   = fabs((1.0-tau*vxx[i*n1+j]) * (1.0-tau*vyy[i*n1+j]) - tau*tau * vxy[i*n1+j] * vxy[i*n1+j]);
+
+
+                    double t1 = 0.5 * fabs(tau + sqrt(fabs(tau*tau - 4 * det)));
+                    double t2 = 0.5 * fabs(tau - sqrt(fabs(tau*tau - 4 * det)));
+
+                    
+                    C = fmax(C, mu_val * fmax(t1,t2));    
+                }
             }
         }
     }
 
     double start_OT(Helper_E& helper_f, const double* mu, Barenblatt& solution, const int outer_iter, Initializer& init){
 
-        int skip = 10; // frequency of printout
+        const int skip = 10; // frequency of printout
 
-        double error_mu,error_nu,error=1.0;
+        double error_mu = 1.0;
+        double error_nu = 1.0;
+        double error=1.0;
 
         /*
             Compute the actual Barenblatt solution
@@ -860,14 +867,17 @@ public:
 
         
         
+        double max_iteration_tmp = max_iteration;
 
         if(outer_iter==0){
             initialize_phi(helper_f,mu); // intiailize phi in the first outer iteration
-            phi_c1 = 100;
-            psi_c1 = 100;
+            phi_c1 = 1;
+            psi_c1 = 1;
 
             phi_c2 = 1;
             psi_c2 = 1;
+
+            // max_iteration_tmp = 60 ;
         }
 
         double solution_error = 1;
@@ -875,17 +885,14 @@ public:
         /*
             Starting the loop
         */
-    
-
-        for(int iter=0;iter<max_iteration;++iter){            
+        
+        for(int iter = 0; iter < max_iteration_tmp; ++iter){
             
             /* 
                 Calculating the relative error
             */
-                        
-            error=fmin(error_mu,error_nu);
 
-            if(iter % 1 == 0){
+            if(iter % 1 == 0 && iter > 0){
                 lambda = calculate_lambda();
                 infgradphi = calculate_infgradphi_on_level_set(lambda);
                 calculate_d1_d2_d3(d1, d2, d3, lambda, infgradphi);
@@ -907,6 +914,7 @@ public:
             error_mu = perform_OT_iteration_forth_det(helper_f,sigma_forth,W2_value,mu);
             error_nu = perform_OT_iteration_back_det(helper_f,sigma_back,W2_value,mu);
             
+            error=fmin(error_mu,error_nu);
 
             /*
                 Display the result per iterations
@@ -917,13 +925,14 @@ public:
             if(iter%skip==skip-1){
                 cout<<"|";
                 /* Compare with actual solution */
-                solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
+                // solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
                 display_iteration(iter,W2_value,error_mu,error_nu,solution_error,C_phi,C_psi);
                 cout << "infgradphi : " << infgradphi << " c1 : " << phi_c1 << " " << psi_c1 << "\n";
 
                 string figurename = "output";
                 for(int i=0;i<n1*n2;++i) push_mu[i] = fabs(push_mu[i] - mu[i]);
                 init.save_image_opencv(push_mu,figurename,(iter+1)/skip, mu_max);
+                // init.save_image_opencv(helper_f.DEstar,figurename,(iter+1)/skip, mu_max);
             }
 
             /* 
@@ -931,7 +940,8 @@ public:
             */
 
             // if(W2_value>0 && ((abs(error)<tolerance && iter>=0) || iter==max_iteration-1 || sigma_forth <1e-9) ){
-            if(((abs(error)<tol_modified && abs(error)>0 && iter>=1) || iter==max_iteration-1) ){
+            if(((abs(error)<tol_modified && abs(error)>0 && iter>=0) || iter==max_iteration_tmp-1) ){
+                // cout << "error : " << error << " iter : " << iter << endl;
                 cout<<"Tolerance met!"<<endl;
                 /* Compare with actual solution */
                 solution_error = compute_barenblatt_solution_error(helper_f, solution, phi, outer_iter);
@@ -962,7 +972,7 @@ int main(int argc, char** argv){
     double m=stod(argv[7]);
     double C=stod(argv[8]);
 
-    double M = 0.5; // initial mass
+    double M = 1.0; // initial mass
 
     Barenblatt solution(n1,n2,tau,m,M);
     solution.calc_solution_at_n(0);
@@ -1012,7 +1022,7 @@ int main(int argc, char** argv){
     create_bin_file(mu,n1*n2,filename);
 
     string figurename = "barenblatt";
-    init.save_image_opencv(mu,figurename,0);
+    // init.save_image_opencv(mu,figurename,0);
 
     clock_t time;
     time=clock();
