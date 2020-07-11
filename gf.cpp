@@ -450,7 +450,7 @@ public:
 
     void calculate_push_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy){
 
-        double eps = pow(1.0/n1, 0.3);
+        double eps = pow(1.0/n1, 0.7);
 
         double xpost,ypost,xpre,ypre;
 
@@ -498,9 +498,9 @@ public:
         }
     }
 
-        void calculate_pull_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy){
+    void calculate_pull_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy){
 
-        double eps = pow(1.0/n1, 0.5);
+        double eps = pow(1.0/n1, 0.7);
 
         double xpost,ypost,xpre,ypre;
 
@@ -644,7 +644,7 @@ public:
         }
     }
 
-    double perform_OT_iteration_back_det(Helper_E& helper_f,double& sigma,double& W2_value,const double* mu){
+    double perform_OT_iteration_back_det(Helper_E& helper_f,double& sigma,double& W2_value,const double* mu, const int outer_iter){
         // ------------------------------------------------------------
         double W2_value_previous, error_nu;
 
@@ -655,11 +655,17 @@ public:
         // helper_f.calculate_DEstar_normalized(phi);
 
         calculate_gradient(psi, vx, vy);
-        // calculate_gradient_vxx_vyy_vxy(phi, vxx, vyy, vxy);
-        // calculate_push_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy);
 
-        calculate_gradient_vxx_vyy_vxy(psi, vxx, vyy, vxy);
-        calculate_pull_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy);
+        if(outer_iter >= 0){
+            calculate_gradient_vxx_vyy_vxy(psi, vxx, vyy, vxy);
+            calculate_pull_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy);    
+        }else{
+            calculate_gradient_vxx_vyy_vxy(phi, vxx, vyy, vxy);
+            calculate_push_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy);    
+        }
+        
+
+        
 
         fftps->perform_inverse_laplacian(push_mu,mu,psi_c1,psi_c2,sigma);
 
@@ -905,20 +911,20 @@ public:
         double max_iteration_tmp = max_iteration;
 
         if(outer_iter==0){
-            // initialize_phi(helper_f,mu); // intiailize phi in the first outer iteration
+            initialize_phi(helper_f,mu); // intiailize phi in the first outer iteration
             phi_c1 = 1;
             psi_c1 = 1;
 
             phi_c2 = 1;
             psi_c2 = 1;
 
-            max_iteration_tmp = 200;
+            
         }
 
         double solution_error = 1;
 
-        if(outer_iter > 15){
-            C_tr = 0.1;
+        if(outer_iter < 20){
+            max_iteration_tmp = 300;
         }
         
         /*
@@ -951,7 +957,7 @@ public:
             sigma_back  = 1;
             
             error_mu = perform_OT_iteration_forth_det(helper_f,sigma_forth,W2_value,mu);
-            error_nu = perform_OT_iteration_back_det(helper_f,sigma_back,W2_value,mu);
+            error_nu = perform_OT_iteration_back_det(helper_f,sigma_back,W2_value,mu,outer_iter);
             
             error=fmin(error_mu,error_nu);
 
