@@ -870,7 +870,7 @@ public:
         double max_iteration_tmp = max_iteration;
 
         if(outer_iter==0){
-            initialize_phi(helper_f,mu); // intiailize phi in the first outer iteration
+            // initialize_phi(helper_f,mu); // intiailize phi in the first outer iteration
             phi_c1 = 1;
             psi_c1 = 1;
 
@@ -929,9 +929,9 @@ public:
                 display_iteration(iter,W2_value,error_mu,error_nu,solution_error,C_phi,C_psi);
                 cout << "infgradphi : " << infgradphi << " c1 : " << phi_c1 << " " << psi_c1 << "\n";
 
-                string figurename = "output";
-                for(int i=0;i<n1*n2;++i) push_mu[i] = fabs(push_mu[i] - mu[i]);
-                init.save_image_opencv(push_mu,figurename,(iter+1)/skip, mu_max);
+                // string figurename = "output";
+                // for(int i=0;i<n1*n2;++i) push_mu[i] = fabs(push_mu[i] - mu[i]);
+                // init.save_image_opencv(push_mu,figurename,(iter+1)/skip, mu_max);
                 // init.save_image_opencv(helper_f.DEstar,figurename,(iter+1)/skip, mu_max);
             }
 
@@ -1047,7 +1047,7 @@ int main(int argc, char** argv){
 
         sum_solution += solution_error;
 
-        init.save_image_opencv(mu,figurename,n+1);
+        // init.save_image_opencv(mu,figurename,n+1);
     }
 
     time=clock()-time;
