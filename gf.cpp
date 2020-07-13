@@ -789,9 +789,14 @@ public:
         }
     }
 
-    void set_coeff(double& c1, double& c2, const double C, const double mu_max, const double d1, const double d2, const double d3, const bool verbose, const double C_tr){
+    void set_coeff_m_2(double& c1, double& c2, const double mu_max, const double C_c_transform){
+        c1 = 1/gamma;
+        c2 = C_c_transform * tau;
+    }
+
+    void set_coeff(double& c1, double& c2, const double C, const double mu_max, const double d1, const double d2, const double d3, const bool verbose, const double C_c_transform){
         c1 = C * d1 + d2;
-        c2 = C * d1 + C_tr * tau;
+        c2 = C * d1 + C_c_transform * tau;
     }
 
     void initialize_phi(Helper_E& helper_f,const double* mu){
@@ -819,25 +824,27 @@ public:
             }
         }
         area /= n1*n2;
+        
         double eval = 1.0 / pow(gamma, mprime - 1);
+
         d1 = eval * pow(lambda, mprime-1) / infgradphi;
         d2 = eval * pow(lambda, mprime-2) * (mprime - 1) * area;
         // d3 = eval / infgradphi;
     }
 
-    void calculate_trace_constant(double& C, const double* mu){
+    void calculate_c_transform_constant(double& C, const double* phi, const double* mu){
 
         C = 0;
 
-        calculate_gradient(phi, vx, vy);
+        // calculate_gradient(phi, vx, vy);
 
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
 
                 double x = (j+0.5)/n1 - tau * vx[i*n1+j];
                 double y = (i+0.5)/n2 - tau * vy[i*n1+j];
-
-                double mu_val = interpolate_function(x,y,mu);
+                // double mu_val = interpolate_function(x,y,mu);
+                double mu_val = 1;
 
                 if(mu_val > 0){
                     /* calculate eigen values */
@@ -852,7 +859,7 @@ public:
                     double t2 = 0.5 * fabs(tau - sqrt(fabs(tau*tau - 4 * det)));
 
                     
-                    C = fmax(C, mu_val * fmax(t1,t2));    
+                    C = fmax(C, mu_val*fmax(t1,t2));
                 }
             }
         }
@@ -904,7 +911,7 @@ public:
         double d2 = 1;
         double d3 = 1;
 
-        double C_tr = 1;
+        double C_c_transform = 1;
 
         
         
@@ -938,15 +945,28 @@ public:
             */
 
             if(iter % 5 == 0 && iter > 0){
-                lambda = calculate_lambda();
-                infgradphi = calculate_infgradphi_on_level_set(lambda);
-                calculate_d1_d2_d3(d1, d2, d3, lambda, infgradphi);
-                calculate_trace_constant(C_tr, mu);
+                if(m == 2){
+                    calculate_c_transform_constant(C_c_transform, phi, mu);
+                    C_c_transform *= mu_max;
+                    set_coeff_m_2(phi_c1, phi_c2, mu_max, C_c_transform);
+                    calculate_c_transform_constant(C_c_transform, psi, mu);
+                    C_c_transform *= mu_max;
+                    set_coeff_m_2(psi_c1, psi_c2, mu_max, C_c_transform);    
+                }else{
+                    lambda = calculate_lambda();
+                    infgradphi = calculate_infgradphi_on_level_set(lambda);
+                    calculate_d1_d2_d3(d1, d2, d3, lambda, infgradphi);
+                    
 
-                // C_phi = fmax(0.15,fmin(0.3,C_phi/sigma_forth));
-                // C_psi = fmax(0.15,fmin(0.3,C_psi/sigma_back));
-                set_coeff(phi_c1, phi_c2, C_phi, mu_max, d1, d2, d3, false, C_tr);
-                set_coeff(psi_c1, psi_c2, C_psi, mu_max, d1, d2, d3, false, C_tr);
+                    // C_phi = fmax(0.15,fmin(0.3,C_phi/sigma_forth));
+                    // C_psi = fmax(0.15,fmin(0.3,C_psi/sigma_back));
+                    calculate_c_transform_constant(C_c_transform, phi, mu);
+                    C_c_transform *= mu_max;
+                    set_coeff(phi_c1, phi_c2, C_phi, mu_max, d1, d2, d3, false, C_c_transform);
+                    calculate_c_transform_constant(C_c_transform, psi, mu);
+                    C_c_transform *= mu_max;
+                    set_coeff(psi_c1, psi_c2, C_psi, mu_max, d1, d2, d3, false, C_c_transform);    
+                }
             }
 
             /*
