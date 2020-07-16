@@ -543,7 +543,7 @@ void init_obstacle_from_image(unsigned char* obstacle, int n1, int n2){
 
     /// Erode
 
-    int erosion_size = 3;
+    int erosion_size = 1;
 
     int erosion_type = MORPH_RECT;
 
@@ -579,40 +579,6 @@ void init_obstacle_from_image(unsigned char* obstacle, int n1, int n2){
         waitKey(0);
     }
 }
-
-
-
-void init_entropy_blocks_obstacle(double* nu, double gamma, double r, double a, int n1, int n2){
-
-    // Quadratic potential V = 1/2 a ( (x-xc)^2 + (y-yc)^2 )
-    double xc=0.9;
-    double yc=0.1;
-
-    double nuSum=0;
-    int pcount=n1*n2;
-
-    for(int i=0;i<n2;i++){
-        for(int j=0;j<n1;j++){
-            
-            double x=(j+.5)/(n1*1.0);
-            double y=(i+.5)/(n2*1.0);
-
-            bool a1=(fabs(x-0.5)<0.05) && (y>-0.1) && (y<0.5);
-            bool a2=false;
-
-            if(!a1 && !a2){
-                nu[i*n1+j]=exp(-a*((x-xc)*(x-xc)+(y-yc)*(y-yc))/(2*gamma));
-                nuSum+=nu[i*n1+j];
-            }                                        
-        }
-    }
-    nuSum/=pcount;    
-    
-    for(int k=0;k<pcount;k++){
-        nu[k]/=nuSum;
-    } 
-}
-
 
 
 #endif

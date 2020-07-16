@@ -81,10 +81,10 @@ public:
 
     void init_entropy_image_obstacle_opencv(double* nu, const unsigned char* obstacle, const string& data_folder){
 
-        double xc=0.8;
-        double yc=0.8;
+        double xc=0.9;
+        double yc=0.9;
 
-        double a = 0;
+        double a = 10;
 
         for(int i=0;i<n2;i++){
             for(int j=0;j<n1;j++){
