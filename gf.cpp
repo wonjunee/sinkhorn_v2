@@ -1080,7 +1080,7 @@ int main(int argc, char** argv){
 
     // Initialize mu
     double* mu=new double[n1*n2];
-    // create_mu_square(mu,0.2,0.2,0.1,n1,n2);
+    create_mu_square(mu,0.2,0.2,0.1,n1,n2);
 
     cout << "XXX Starting Gradient Flow XXX" << endl;
 
@@ -1111,11 +1111,7 @@ int main(int argc, char** argv){
     // init_obstacle_pac_man(obstacle, n1, n2);
     // init_obstacle_circle(obstacle, n1, n2);
 
-    double obstacle_max = obstacle[0]; for(int i=1;i<n1*n2;++i) obstacle_max = fmax(obstacle_max,obstacle[i]);
-    cout << obstacle_max << "\n"; 
-    for(int i=0;i<n1*n2;++i) {mu[i] = 1.0 * obstacle[i] / obstacle_max; }
-
-    // init.init_entropy_image_obstacle_opencv(helper_f.nu, obstacle, data_folder);
+    init.init_entropy_image_obstacle_opencv(helper_f.nu, obstacle, data_folder);
 
     cout << setprecision(6);
 
