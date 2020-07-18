@@ -949,15 +949,6 @@ public:
         double max_iteration_tmp = max_iteration;
 
         initialize_phi(helper_f,mu); // intiailize phi in the first outer iteration
-
-        if(outer_iter==0){
-            
-            phi_c1 = 1;
-            psi_c1 = 1;
-
-            phi_c2 = 1;
-            psi_c2 = 1;            
-        }
         
         /*
             Starting the loop
@@ -969,7 +960,7 @@ public:
                 Calculating the relative error
             */
 
-            if(iter % 50 == 0 && iter > 0){
+            if(iter % 10 == 0 && iter >= 0){
                 if(m == 2){
                     calculate_c_transform_constant(C_c_transform, phi, mu);
                     C_c_transform *= mu_max;
@@ -990,6 +981,15 @@ public:
                     calculate_c_transform_constant(C_c_transform, psi, mu);
                     set_coeff(psi_c1, psi_c2, C_psi, mu_max, d1, d2, d3, false, C_c_transform);    
                 }
+            }
+
+            if(outer_iter==0){
+            
+                phi_c1 = 0.1;
+                psi_c1 = 0.1;
+
+                phi_c2 = 0.1;
+                psi_c2 = 0.1;            
             }
 
             /*
