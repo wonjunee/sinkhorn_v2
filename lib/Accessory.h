@@ -254,7 +254,7 @@ void create_mu_from_image(double* mu,int n1,int n2){
     int pcount=n1*n2;
 
     ifstream infile;
-    infile.open("./external-images/starobstacle_gray_512.dat");
+    infile.open("../external-images/starobstacle_gray_512.dat");
 
     double x;
     int ind=0;
@@ -294,24 +294,16 @@ void init_entropy_quadratic(double* nu,double xc, double yc, double a, int n1, i
 }
 
 
-void init_entropy_sine(double* nu,double s1, double s2, double a, int n1, int n2){    
-    
-    double nuSum=0;
-    int pcount=n1*n2;
-    
+void init_entropy_sine(double* nu,double s1, double s2, double a, int n1, int n2){        
     for(int i=0;i<n2;i++){
         for(int j=0;j<n1;j++){
             
             double x=(j+.5)/(n1*1.0);
             double y=(i+.5)/(n2*1.0);
 
-            nu[i*n1+j]=a*(-sin(s1*M_PI*x)*sin(s2*M_PI*y)+2);
-            // nu[i*n1+j]=0;
-            nuSum+=nu[i*n1+j];
-            
+            nu[i*n1+j]=a*(-sin(s1*M_PI*x)*sin(s2*M_PI*y)+1);
         }
     }
-    nuSum/=pcount;    
 }
 
 // obstacle (disk/square) with radius/side r centered at the middle

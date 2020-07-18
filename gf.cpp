@@ -80,7 +80,7 @@ public:
         }
     }
 
-    void calculate_DEstar_normalized(const double* phi, const double tolerance=1e-7){
+    void calculate_DEstar_normalized(double* phi, const double tolerance=1e-7){
         
         double lambda_a=-phi[0]-nu[0];
         double lambda_b=-phi[0]-nu[0];
@@ -138,8 +138,8 @@ public:
             }else{
                 DEstar[i] = 0;
             }
-            
         }
+        for(int i=0;i<n1*n2;++i) phi[i] -= lambda;
     }
 
 }; // Helper_E
@@ -454,6 +454,12 @@ public:
         return error/(1.0*n1*n2);
     }
 
+    double calculate_L1_error(const double* push_mu, const double* mu){
+        double error = 0;
+        for(int i=0;i<n1*n2;++i) error += fabs(push_mu[i] - mu[i]);
+        return error/(1.0*n1*n2);
+    }
+
     void calculate_push_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy){
 
         double eps = pow(1.0/n1, 0.7);
@@ -679,42 +685,28 @@ public:
 
     double perform_OT_iteration_back_det(Helper_E& helper_f,double& sigma,double& W2_value,const double* mu, const int iter){
         // ------------------------------------------------------------
-        double W2_value_previous, error_nu;
+        // double W2_value_previous = 0;
+        double error_nu = 0;
 
         flt2d->find_c_concave(psi,phi,tau);
         flt2d->find_c_concave(phi,psi,tau);
 
-        helper_f.calculate_DEstar(phi);
-        // helper_f.calculate_DEstar_normalized(phi);
+        // helper_f.calculate_DEstar(phi);
+        helper_f.calculate_DEstar_normalized(phi);
 
         calculate_gradient(psi, vx, vy);
 
-        // if(iter % 49 < 15){
-        //     calculate_gradient_vxx_vyy_vxy(phi, vxx, vyy, vxy);
-        //     calculate_push_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy);
-        // }else{
-        //     calculate_gradient_vxx_vyy_vxy(psi, vxx, vyy, vxy);
-        //     calculate_pull_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy);    
-        // }
+        // calculate_gradient_vxx_vyy_vxy(phi, vxx, vyy, vxy);
+        // calculate_push_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy,psi);
 
-        calculate_gradient_vxx_vyy_vxy(phi, vxx, vyy, vxy);
-        calculate_push_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy,psi);
-            
-
-            
-
-        // if(outer_iter >= 0){
-        //     calculate_gradient_vxx_vyy_vxy(psi, vxx, vyy, vxy);
-        //     calculate_pull_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy);    
-        // }else{
-        //     calculate_gradient_vxx_vyy_vxy(phi, vxx, vyy, vxy);
-        //     calculate_push_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy);
-        // }        
+        calculate_gradient_vxx_vyy_vxy(psi, vxx, vyy, vxy);
+        calculate_pull_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy);       
 
         fftps->perform_inverse_laplacian(push_mu,mu,psi_c1,psi_c2,sigma);
 
-        W2_value_previous=calculate_dual_value(helper_f,phi,psi,mu);
-        error_nu=calculate_h_minus_1(fftps,push_mu,mu);
+        // W2_value_previous=calculate_dual_value(helper_f,phi,psi,mu);
+        // error_nu=calculate_h_minus_1(fftps,push_mu,mu);
+        error_nu=calculate_L1_error(push_mu,mu);
 
         for(int i=0;i<n1*n2;++i){
             psi[i] += fftps->workspace[i];
@@ -724,7 +716,7 @@ public:
 
         W2_value=calculate_dual_value(helper_f,phi,psi,mu);
 
-        sigma = update_sigma(sigma, W2_value, W2_value_previous, error_nu);
+        // sigma = update_sigma(sigma, W2_value, W2_value_previous, error_nu);
 
         return error_nu;
     }
@@ -732,35 +724,29 @@ public:
 
     double perform_OT_iteration_forth_det(Helper_E& helper_f,double& sigma,double& W2_value,const double* mu, const int iter){
         // ------------------------------------------------------------
-        double W2_value_previous, error_mu;
+        // double W2_value_previous = 0;
+        double error_mu = 0;
 
         flt2d->find_c_concave(phi,psi,tau);
         flt2d->find_c_concave(psi,phi,tau);
             
         calculate_gradient(phi, vx, vy);
 
-        // if(iter % 51 < 15){
-        //     calculate_gradient_vxx_vyy_vxy(phi, vxx, vyy, vxy);
-        //     calculate_pull_rho(mu, push_mu,vx,vy,vxx,vyy,vxy);    
-        // }else{
-        //     calculate_gradient_vxx_vyy_vxy(psi, vxx, vyy, vxy);
-        //     calculate_push_rho(mu, push_mu,vx,vy,vxx,vyy,vxy);    
-        // }
-
         calculate_gradient_vxx_vyy_vxy(psi, vxx, vyy, vxy);
         calculate_push_rho(mu, push_mu,vx,vy,vxx,vyy,vxy,phi);
-        
 
+        // calculate_gradient_vxx_vyy_vxy(phi, vxx, vyy, vxy);
+        // calculate_pull_rho(mu, push_mu,vx,vy,vxx,vyy,vxy);    
         
-        
-        helper_f.calculate_DEstar(phi);
-        // helper_f.calculate_DEstar_normalized(phi);
+        // helper_f.calculate_DEstar(phi);
+        helper_f.calculate_DEstar_normalized(phi);
 
         fftps->perform_inverse_laplacian(push_mu,helper_f.DEstar,phi_c1,phi_c2,sigma);
 
 
-        W2_value_previous=calculate_dual_value(helper_f,phi,psi,mu);
-        error_mu=calculate_h_minus_1(fftps,push_mu,helper_f.DEstar);
+        // W2_value_previous=calculate_dual_value(helper_f,phi,psi,mu);
+        // error_mu=calculate_h_minus_1(fftps,push_mu,helper_f.DEstar);
+        error_mu=calculate_L1_error(push_mu,helper_f.DEstar);
 
         for(int i=0;i<n1*n2;++i){
             phi[i] += fftps->workspace[i];
@@ -771,8 +757,7 @@ public:
 
         W2_value=calculate_dual_value(helper_f,phi,psi,mu);
 
-        sigma = update_sigma(sigma, W2_value, W2_value_previous, error_mu);
-
+        // sigma = update_sigma(sigma, W2_value, W2_value_previous, error_mu);
 
         return error_mu;
     }
@@ -782,7 +767,7 @@ public:
     void display_iteration(const int iter,const double W2_value,const double error_mu,const double error_nu, const double C_phi, const double C_psi) const{
         cout << setprecision(6);
         cout << fixed;
-        cout <<setw(5)<<iter+1 << " C : " << C_phi << " " << C_psi << " coeff : " << setw(10) << phi_c2/phi_c1 << " " << setw(6) << psi_c2/psi_c1 << "  W2 : " << scientific << setw(13) << W2_value << "  h-1 : "<<scientific<<setw(13) << error_mu << " " << error_nu<<endl;
+        cout <<setw(5)<<iter+1 << " C : " << C_phi << " " << C_psi << " coeff : " << setw(10) << phi_c2/phi_c1 << " " << setw(6) << psi_c2/psi_c1 << "  W2 : " << scientific << setw(13) << W2_value << "  L1 error : "<<scientific<<setw(13) << error_mu << " " << error_nu<<endl;
     }
 
     /**
@@ -963,15 +948,15 @@ public:
         
         double max_iteration_tmp = max_iteration;
 
+        initialize_phi(helper_f,mu); // intiailize phi in the first outer iteration
+
         if(outer_iter==0){
-            // initialize_phi(helper_f,mu); // intiailize phi in the first outer iteration
+            
             phi_c1 = 1;
             psi_c1 = 1;
 
             phi_c2 = 1;
-            psi_c2 = 1;
-
-            
+            psi_c2 = 1;            
         }
         
         /*
@@ -1080,7 +1065,8 @@ int main(int argc, char** argv){
 
     // Initialize mu
     double* mu=new double[n1*n2];
-    create_mu_square(mu,0.2,0.2,0.1,n1,n2);
+    // create_mu_square(mu,0.2,0.2,0.1,n1,n2);
+    create_mu_from_image(mu,n1,n2);
 
     cout << "XXX Starting Gradient Flow XXX" << endl;
 
@@ -1101,17 +1087,19 @@ int main(int argc, char** argv){
     cout << "Max Iteration : " << max_iteration <<endl;
     cout << "tolerance     : " << tolerance <<endl;
 
-    unsigned char* obstacle = new unsigned char[n1*n2];
+    // unsigned char* obstacle = new unsigned char[n1*n2];
 
     string data_folder = "data";
 
     Helper_E helper_f(n1,n2,gamma,tau,m,M);
-    init_obstacle_from_image(obstacle, n1, n2);
+    // init_obstacle_from_image(obstacle, n1, n2);
     // init_obstacle_two_moons(obstacle, n1, n2);
     // init_obstacle_pac_man(obstacle, n1, n2);
     // init_obstacle_circle(obstacle, n1, n2);
 
-    init.init_entropy_image_obstacle_opencv(helper_f.nu, obstacle, data_folder);
+    // init.init_entropy_image_obstacle_opencv(helper_f.nu, obstacle, data_folder);
+
+    init_entropy_sine(helper_f.nu, 5, 3, 1, n1, n2);
 
     cout << setprecision(6);
 
@@ -1140,25 +1128,17 @@ int main(int argc, char** argv){
         helper_f.calculate_DEstar_normalized(bf.phi);
         memcpy(mu,helper_f.DEstar,n1*n2*sizeof(double));
 
-        sum=0;
-        for(int i=0;i<n1*n2;++i){
-            sum+=mu[i];
-        }
-        cout << "sum : " << sum/(n1*n2) << endl;
+        /* print out sum */
+        sum=0; for(int i=0;i<n1*n2;++i) sum+=mu[i]; cout << "sum : " << sum/(n1*n2) << endl;
 
         filename="./data/mu-"+to_string(n+1)+".csv";
         create_bin_file(mu,n1*n2,filename);
-
-        sum_solution += solution_error;
 
         if(plot > 0) init.save_image_opencv(mu,figurename,n+1);
     }
 
     time=clock()-time;
     printf ("\nCPU time for GF: %f seconds.\n\n",((float)time)/CLOCKS_PER_SEC);
-
-    cout << fixed;
-    cout << "L1 Error : " << setprecision(10) << sum_solution / nt  <<endl;
 
     delete[] mu;
 }
