@@ -547,7 +547,8 @@ public:
 
     void calculate_push_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy,const double* phi){
 
-        double eps = pow(1.0/n1, 0.5);
+        double eps = pow(1.0/n1, 0.7);
+        double det_threshold = 0.99;
 
         double xpost,ypost,xpre,ypre;
 
@@ -568,11 +569,9 @@ public:
                     double vyy_val = interpolate_function(x,y,vyy);
                     double vxy_val = interpolate_function(x,y,vxy);
 
-                    // push_rho[i*n1+j]=rhovalue/fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy)); 
                     double det = fabs((1.0-tau*vxx_val) * (1.0-tau*vyy_val) - tau*tau * vxy_val * vxy_val);
-                    // double det = fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy));
 
-                    if(det > 0.9){
+                    if(det > det_threshold){
                         push_rho[i*n1+j] = rhovalue/det;    
                     }else{
                         int jpp = fmin(n1-1,j+2);
@@ -690,9 +689,8 @@ public:
 
         flt2d->find_c_concave(psi,phi,tau);
         flt2d->find_c_concave(phi,psi,tau);
-
-        // helper_f.calculate_DEstar(phi);
-        helper_f.calculate_DEstar_normalized(phi);
+    
+        helper_f.calculate_DEstar_normalized(phi);    
 
         calculate_gradient(psi, vx, vy);
 
@@ -737,9 +735,8 @@ public:
 
         // calculate_gradient_vxx_vyy_vxy(phi, vxx, vyy, vxy);
         // calculate_pull_rho(mu, push_mu,vx,vy,vxx,vyy,vxy);    
-        
-        // helper_f.calculate_DEstar(phi);
-        helper_f.calculate_DEstar_normalized(phi);
+            
+        helper_f.calculate_DEstar_normalized(phi);    
 
         fftps->perform_inverse_laplacian(push_mu,helper_f.DEstar,phi_c1,phi_c2,sigma);
 
@@ -767,7 +764,7 @@ public:
     void display_iteration(const int iter,const double W2_value,const double error_mu,const double error_nu, const double C_phi, const double C_psi, const double infgradphi) const{
         cout << setprecision(6);
         cout << fixed;
-        cout <<setw(5)<<iter+1 << " C : " << C_phi << "  infgradphi : " << infgradphi << "  c1 : " << phi_c1 << " " << psi_c1 << " coeff : " << setw(10) << phi_c2/phi_c1 << " " << setw(6) << psi_c2/psi_c1 << "  W2 : " << scientific << setw(13) << W2_value << "  L1 error : "<<scientific<<setw(13) << error_mu << " " << error_nu<<endl;
+        cout <<setw(5)<<iter+1 << " C : " << C_phi << "  infgradphi : " << infgradphi << "  c1 : " << phi_c1 << " " << psi_c1 << " coeff : " << setw(10) << phi_c2/phi_c1 << " " << setw(6) << psi_c2/psi_c1 << "  W2 : " << scientific << setw(13) << W2_value << "  L1 error : "<<scientific<<setw(13) << error_mu << " " << error_nu<<"\n";
     }
 
     /**
@@ -784,7 +781,7 @@ public:
         // if(phimax > 2) return 0.1;
         // return fmin(2,phimax * 0.5);
 
-        return fmax(0.1,phimax * 0.001);
+        return fmax(0.01,phimax * 0.001);
     }
 
     /**
@@ -802,13 +799,20 @@ public:
                         double gradxphi = 0.5*n1*(phi[i*n1+j+1]-phi[i*n1+j-1]-nu[i*n1+j+1]+nu[i*n1+j-1]);
                         double gradyphi = 0.5*n2*(phi[(i+1)*n1+j]-phi[(i-1)*n1+j]-nu[(i+1)*n1+j]+nu[(i-1)*n1+j]);
                         double eval = gradxphi*gradxphi + gradyphi*gradyphi;
-                        infgradphi = fmin(infgradphi, eval);
+
+                        if(count == 0) {
+                            infgradphi = eval;
+                            count = 1;
+                        } else {
+                            infgradphi = fmin(infgradphi, eval);
+                        }
+                        
                     }
                 }
             }
         }
 
-        return fmax(1,sqrt(infgradphi));
+        return fmax(0.1,sqrt(infgradphi));
     }
 
     void set_coeff_m_2(double& c1, double& c2, const double mu_max, const double C_c_transform){
@@ -817,49 +821,57 @@ public:
     }
 
     void set_coeff(double& c1, double& c2, const double C, const double mu_max, const double d1, const double d2, const double d3, const bool verbose, const double C_c_transform){
-        c1 = C * d1 + d2;
-        c2 = C * d1 + C_c_transform * tau;
+        // c1 = C * d1 + d2;
+        // c2 = C * d1 + C_c_transform * tau;
+
+        c1 = d3 * C * d1 + d2;
+        c2 = d3 * C * d1 + C_c_transform * tau;
     }
 
     void initialize_phi(Helper_E& helper_f,const double* mu){
         for(int i=0;i<n1*n2;++i){
-            phi[i] = - (gamma * pow(mu[i],m-1) + helper_f.nu[i]);    
+            if(helper_f.nu[i] >= 0){
+                phi[i] = - (gamma * pow(mu[i],m-1) + helper_f.nu[i]);
+            } else {
+                phi[i] = 0;
+            }
         }
     }
 
     void calculate_d1_d2_d3(double& d1, double& d2, double& d3, const double lambda, const double infgradphi, const double* nu){
-        double area = 0;
-        for(int i=0;i<n1*n2;++i){
-            if(nu[i] >= 0){
-                if(-phi[i]-nu[i] > lambda){
-                    area += 1;
-                }    
-            }
-        }
-        area /= n1*n2;
+        // double area = 0;
+        // for(int i=0;i<n1*n2;++i){
+        //     if(nu[i] >= 0){
+        //         if(-phi[i]-nu[i] > lambda){
+        //             area += 1;
+        //         }    
+        //     }
+        // }
+        // area /= n1*n2;
         
         double eval = 1.0 / pow(gamma, mprime - 1);
 
-        d1 = eval * pow(lambda, mprime-1) / infgradphi * (1-area);
+        d1 = eval * pow(lambda, mprime-1) / infgradphi;
         d2 = eval * pow(lambda, mprime-2) * (mprime - 1);
-        // d3 = eval / infgradphi;
+
+        // cout << "d1 : " << d1 << " d2 : " << d2 << "\n";
     }
 
     void calculate_c_transform_constant(double& C, const double* phi, const double* mu){
 
         C = 0;
 
-        calculate_gradient(phi, vx, vy);
+        // calculate_gradient(phi, vx, vy);
 
-        // double mu_max = 0; for(int i=0;i<n1*n2;++i) mu_max = fmax(mu_max, mu[i]);
+        double mu_max = 0; for(int i=0;i<n1*n2;++i) mu_max = fmax(mu_max, mu[i]);
 
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
 
                 double x = (j+0.5)/n1 - tau * vx[i*n1+j];
                 double y = (i+0.5)/n2 - tau * vy[i*n1+j];
-                double mu_val = interpolate_function(x,y,mu);
-                // double mu_val = 1;
+                // double mu_val = interpolate_function(x,y,mu);
+                double mu_val = 1;
 
                 if(mu_val > 0){
                     /* calculate eigen values */
@@ -879,12 +891,12 @@ public:
             }
         }
 
-        // C *= mu_max;
+        C *= mu_max;
     }
 
     void start_OT(Helper_E& helper_f, const double* mu, const int outer_iter, Initializer& init){
 
-        const int skip = 10; // frequency of printout
+        const int skip = 50; // frequency of printout
 
         double error_mu = 1.0;
         double error_nu = 1.0;
@@ -941,13 +953,11 @@ public:
                 Calculating the relative error
             */
 
-            if(iter % 10 == 0 && iter >= 0){
+            if(iter % 1 == 0 && iter >= 0){
                 if(m == 2){
                     calculate_c_transform_constant(C_c_transform, phi, mu);
-                    C_c_transform *= mu_max;
                     set_coeff_m_2(phi_c1, phi_c2, mu_max, C_c_transform);
-                    calculate_c_transform_constant(C_c_transform, psi, mu);
-                    C_c_transform *= mu_max;
+                    calculate_c_transform_constant(C_c_transform, psi, helper_f.DEstar);
                     set_coeff_m_2(psi_c1, psi_c2, mu_max, C_c_transform);    
                 }else{
                     lambda = calculate_lambda(helper_f.nu);
@@ -957,14 +967,16 @@ public:
 
                     // C_phi = fmax(0.15,fmin(0.3,C_phi/sigma_forth));
                     // C_psi = fmax(0.15,fmin(0.3,C_psi/sigma_back));
+
+                    d3 = pow(1.1,(iter+1)/100);
                     calculate_c_transform_constant(C_c_transform, phi, mu);
                     set_coeff(phi_c1, phi_c2, C_phi, mu_max, d1, d2, d3, false, C_c_transform);
-                    calculate_c_transform_constant(C_c_transform, psi, mu);
+                    calculate_c_transform_constant(C_c_transform, psi, helper_f.DEstar);
                     set_coeff(psi_c1, psi_c2, C_psi, mu_max, d1, d2, d3, false, C_c_transform);    
                 }
             }
 
-            if(outer_iter==0){
+            if(outer_iter==0 && iter < 10){
             
                 phi_c1 = 0.1;
                 psi_c1 = 0.1;
@@ -991,8 +1003,8 @@ public:
 
             // if(W2_value>0 && ((abs(error)<tolerance && iter>=0) || iter==max_iteration-1 || sigma_forth <1e-9) ){
             if(((abs(error)<tol_modified && abs(error)>0 && iter>=0) || iter==max_iteration_tmp-1) ){
-                // cout << "error : " << error << " iter : " << iter << endl;
-                cout<<"Tolerance met!"<<endl;
+                // cout << "error : " << error << " iter : " << iter << "\n";
+                // cout<<"Tolerance met!"<<"\n";
                 display_iteration(iter,W2_value,error_mu,error_nu,C_phi,C_psi,infgradphi);
                 break;
             }
@@ -1001,10 +1013,10 @@ public:
                 Display the result per iterations
             */
 
-            cout<<"-"<<flush;
+            // cout<<"-"<<flush;
 
             if(iter%skip==skip-1){
-                cout<<"|";
+                // cout<<"|";
                 display_iteration(iter,W2_value,error_mu,error_nu,C_phi,C_psi,infgradphi);
 
                 string figurename = "output";
@@ -1012,8 +1024,6 @@ public:
                 init.save_image_opencv(push_mu,figurename,(iter+1)/skip, mu_max);
                 // init.save_image_opencv(helper_f.DEstar,figurename,(iter+1)/skip, mu_max);
             }
-
-            
         }
     }
 
@@ -1022,8 +1032,8 @@ public:
 
 int main(int argc, char** argv){
     if(argc!=11){
-        cout<<"Do the following:"<<endl;
-        cout<<"./gf [n1] [n2] [max_iteration] [tolerance] [nt] [tau] [gamma] [m] [C trace] [opencv 0 or 1]"<<endl;
+        cout<<"Do the following:"<<"\n";
+        cout<<"./gf [n1] [n2] [max_iteration] [tolerance] [nt] [tau] [gamma] [m] [C trace] [opencv 0 or 1]"<<"\n";
         return 0;
     }
 
@@ -1040,6 +1050,22 @@ int main(int argc, char** argv){
 
     double M = 1;
 
+
+    cout << "n1   : " << n1 <<"\n";
+    cout << "n2   : " << n2 <<"\n";
+    cout << "nt   : " << nt <<"\n";
+    cout << "tau  : " << tau << "\n";
+    cout << "gamma: " << gamma << "\n";
+    cout << "m    : " << m << "\n";
+    cout << "Max Iteration : " << max_iteration <<"\n";
+    cout << "tolerance     : " << tolerance <<"\n";
+
+
+    /* modify gamma */
+    gamma = gamma * m /(m-1);
+
+    cout << "Modified gamma : " << gamma << "\n";
+
     /* Initialize Initializer */
     Initializer init(n1,n2);
 
@@ -1050,24 +1076,15 @@ int main(int argc, char** argv){
     // create_mu_square(mu,0.2,0.2,0.1,n1,n2);
     create_mu_from_image(mu,n1,n2);
 
-    cout << "XXX Starting Gradient Flow XXX" << endl;
+    cout << "XXX Starting Gradient Flow XXX" << "\n";
 
-    cout << endl;
+    cout << "\n";
     // declaring argument of time() 
     time_t my_time = time(NULL);
   
     // ctime() used to give the present time 
     printf("%s", ctime(&my_time));
-    cout << endl;
-
-    cout << "n1   : " << n1 <<endl;
-    cout << "n2   : " << n2 <<endl;
-    cout << "nt   : " << nt <<endl;
-    cout << "tau  : " << tau << endl;
-    cout << "gamma: " << gamma << endl;
-    cout << "m    : " << m << endl;
-    cout << "Max Iteration : " << max_iteration <<endl;
-    cout << "tolerance     : " << tolerance <<endl;
+    cout << "\n";
 
     // unsigned char* obstacle = new unsigned char[n1*n2];
 
@@ -1075,7 +1092,7 @@ int main(int argc, char** argv){
 
     Helper_E helper_f(n1,n2,gamma,tau,m,M);
 
-    double a = 0.5;
+    double a = 0.1;
     init_entropy_sine(helper_f.nu, 5, 3, a, n1, n2);
 
     cout << "a for entropy sine : " << a << "\n";
@@ -1112,11 +1129,11 @@ int main(int argc, char** argv){
 
         bf.start_OT(helper_f, mu, n, init);
         // helper_f.calculate_DEstar(bf.phi);
-        // helper_f.calculate_DEstar_normalized(bf.phi);
+        helper_f.calculate_DEstar_normalized(bf.phi);
         memcpy(mu,helper_f.DEstar,n1*n2*sizeof(double));
 
         /* print out sum */
-        sum=0; for(int i=0;i<n1*n2;++i) sum+=mu[i]; cout << "sum : " << sum/(n1*n2) << endl;
+        sum=0; for(int i=0;i<n1*n2;++i) sum+=mu[i]; cout << "sum : " << sum/(n1*n2) << "\n";
 
         filename="./data/mu-"+to_string(n+1)+".csv";
         create_bin_file(mu,n1*n2,filename);
