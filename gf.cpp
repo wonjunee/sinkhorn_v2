@@ -778,10 +778,10 @@ public:
                 phimax = fmax(phimax,-phi[i]-nu[i]);    
             }
         }
-        // if(phimax > 2) return 0.1;
-        // return fmin(2,phimax * 0.5);
+        if(phimax > 1) return 0.1;
+        return phimax * 0.1;
 
-        return fmax(0.01,phimax * 0.2);
+        // return fmax(0.1,phimax * 0.2);
     }
 
     /**
@@ -968,7 +968,7 @@ public:
                     // C_phi = fmax(0.15,fmin(0.3,C_phi/sigma_forth));
                     // C_psi = fmax(0.15,fmin(0.3,C_psi/sigma_back));
 
-                    d3 = pow(1.2,(iter+1)/100);
+                    d3 = pow(1.05,(iter+1)/100);
                     calculate_c_transform_constant(C_c_transform, phi, mu);
                     set_coeff(phi_c1, phi_c2, C_phi, mu_max, d1, d2, d3, false, C_c_transform);
                     calculate_c_transform_constant(C_c_transform, psi, helper_f.DEstar);
@@ -1092,7 +1092,7 @@ int main(int argc, char** argv){
 
     Helper_E helper_f(n1,n2,gamma,tau,m,M);
 
-    double a = 0.05;
+    double a = 1;
     init_entropy_sine(helper_f.nu, 5, 3, a, n1, n2);
 
     cout << "a for entropy sine : " << a << "\n";
