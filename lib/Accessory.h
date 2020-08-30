@@ -10,11 +10,11 @@
 using namespace std;
 using namespace cv;
 
-void create_csv_parameters(int n1,int n2,int nt,double tau, double gamma, double m, double M){
+void create_csv_parameters(int n1,int n2,int nt,double tau, double gamma, double m){
     ofstream outfile;
     string filename = "./data//parameters.csv";
     outfile.open(filename);
-    outfile<<n1<<"\n"<<n2<<"\n"<<nt<<"\n"<<tau<<"\n"<<gamma<<"\n"<<m<<"\n"<<M;
+    outfile<<n1<<"\n"<<n2<<"\n"<<nt<<"\n"<<tau<<"\n"<<gamma<<"\n"<<m;
     outfile.close();
 }
 

@@ -101,6 +101,28 @@ public:
 
         fftw_execute(planOut);
     }
+
+    void solve_heat_equation(double* rho, double tau){
+        memcpy(workspace,rho,n1*n2*sizeof(double));
+
+        fftw_execute(planIn);
+        
+        for(int i=0;i<n2;++i){
+            for(int j=0;j<n1;++j){
+                workspace[i*n1+j]*=exp(-2*tau*kernel[i*n1+j]);
+            }
+        }
+
+        for(int i=0;i<n1*n2;++i){
+            workspace[i]/=4.0*(n1)*(n2);
+        }
+
+        fftw_execute(planOut);
+
+        memcpy(rho,workspace,n1*n2*sizeof(double));
+    }
+
+
 }; // Poisson Solver
 
 #endif

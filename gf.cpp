@@ -13,136 +13,11 @@
 #include "Accessory.h"
 #include "Barenblatt.h"
 #include "Initializer.h"
-
+#define k_type double
+#include "Fast_Marching.h"
+#include "Helper_U.h"
 using namespace std;
 
-class Helper_E{
-public:
-    int n1;
-    int n2;
-
-    double gamma;
-    double tau;
-    double m;
-
-    double M;
-
-    double* nu;
-    double* DEstar;
-
-    Helper_E(){
-        nu=NULL;
-        DEstar=NULL;
-    }
-
-    Helper_E(int n1,int n2,double gamma,double tau,double m,double M){
-        this->n1=n1;
-        this->n2=n2;
-        this->gamma=gamma;
-        this->tau=tau;
-        this->m=m;
-        this->M=M;
-
-        DEstar=new double[n1*n2];
-        nu    =new double[n1*n2];
-    }
-
-    ~Helper_E(){
-        delete[] DEstar;
-        delete[] nu;
-    }
-
-    double calculate_E(const double* phi, const int i, const int j) const
-    {
-        if(nu[i*n1+j] < 0) return 0;
-
-        double c_phi = - phi[i*n1+j] - nu[i*n1+j];
-        double exponent=m/(m-1);
-
-        if(c_phi > 0 ){
-            return 1.0/(exponent*pow(gamma,1/(m-1))) * exp(exponent*log(c_phi));    
-        }
-        return 0;
-    }
-
-    void calculate_DEstar(const double* phi){
-        
-        double exponent = 1.0/(m-1);
-        double gammaprime = pow(gamma,1/(m-1));
-
-        for(int i=0;i<n1*n2;++i){
-            // DEstar[i] = 1.0/gamma * pow(fmax(0, - phi[i]/tau - nu[i]), 1.0/(m-1));
-            if(nu[i] >= 0){
-                DEstar[i] = 1.0/gammaprime * exp(exponent * log(fmax(0, - phi[i] - nu[i])));    
-            }else{
-                DEstar[i] = 0;
-            }
-        }
-    }
-
-    void calculate_DEstar_normalized(double* phi, const double tolerance=1e-7){
-        
-        double lambda_a=-phi[0]-nu[0];
-        double lambda_b=-phi[0]-nu[0];
-        double gammaprime = pow(gamma,1/(m-1));
-
-        for(int i=0;i<n1*n2;++i){
-            lambda_a = fmax(lambda_a, - phi[i] - nu[i]);
-            lambda_b = fmin(lambda_b, - phi[i] - nu[i]);
-        }
-
-        lambda_a = - lambda_a - 1;
-        lambda_b = - lambda_b + gammaprime + 1;
-
-        int max_iteration=100;
-
-        double lambda = 0.5 * (lambda_a + lambda_b);
-
-        double exponent=1.0/(m-1);
-
-        for(int iter=0;iter<max_iteration;++iter){
-            double sum=0;
-
-            for(int i=0;i<n1*n2;++i){
-                if(nu[i] >= 0){
-                    double eval=- phi[i] - nu[i] + lambda;
-                    if(eval>0){
-                        sum+=exp(exponent*log(eval)); // IMPORTANT    
-                    }    
-                }
-            }
-            sum/=gammaprime;
-
-            double val =sum /(1.0*n1*n2)- M;
-
-            if(fabs(val)<tolerance){
-                break;
-            }
-
-            if(val==0){
-                break;
-            }else if(val<0){
-                lambda_a = lambda;
-            }else{
-                lambda_b = lambda;
-            }
-
-            lambda = 0.5 * (lambda_a + lambda_b);
-        }
-
-        
-
-        for(int i=0;i<n1*n2;++i){
-            if(nu[i] >= 0){
-                DEstar[i] = 1.0/gammaprime * pow(fmax(0, - phi[i] - nu[i] + lambda), 1.0/(m-1));    
-            }else{
-                DEstar[i] = 0;
-            }
-        }
-        for(int i=0;i<n1*n2;++i) phi[i] -= lambda;
-    }
-
-}; // Helper_E
 
 
 class BackAndForth{
@@ -150,265 +25,99 @@ public:
     int n1;
     int n2;
 
-    int max_iteration;
-    double tolerance;
-    double W2_value;
+    int max_iteration_;
+    double tolerance_;
+    double W2_value_;
 
     double C; // Coefficients for trance theorem
-    double c1;
-    double c2;
 
-    double phi_c1;
-    double phi_c2;
-    double psi_c1;
-    double psi_c2;
+    double phi_c1_;
+    double phi_c2_;
+    double psi_c1_;
+    double psi_c2_;
 
+    double beta_1_;
+    double beta_2_;
+    double alpha_1_;
+    double alpha_2_;
 
-    double beta_1;
-    double beta_2;
-    double alpha_1;
-    double alpha_2;
+    double gamma_;
+    double tau_;
+    double m_;
+    double mprime_;
 
-    double gamma;
-    double tau;
-    double m;
-    double mprime;
-
-    double SCALER_forth;
-    double SCALER_back ;
+    double SCALER_forth_;
+    double SCALER_back_ ;
     
-    double C_phi;
-    double C_psi;
+    double C_phi_;
+    double C_psi_;
 
-    double* vx;
-    double* vy;
+    double* vx_;
+    double* vy_;
 
-    double* vxx;
-    double* vyy;
-    double* vxy;
+    double* vxx_;
+    double* vyy_;
+    double* vxy_;
 
-    // Initialize phi and psi
-    double* phi;
-    double* psi;
+    double* phi_;
+    double* psi_;
 
-    double* push_mu;
+    double* push_mu_;
 
-    poisson_solver* fftps;
-    FLT2D* flt2d;
-
-    // Pushforward_mapping* pushforward;
+    poisson_solver* fftps_;
+    FLT2D*          flt2d_;
+    Fast_Marching*  fast_marching_;
 
     BackAndForth(int n1, int n2, int max_iteration, double tolerance, double gamma, double tau, double m){
 
         this->n1=n1;
         this->n2=n2;
-        this->max_iteration=max_iteration;
-        this->tolerance=tolerance;
+        max_iteration_ =max_iteration;
+        tolerance_     =tolerance;
 
-        this->gamma=gamma;
-        this->tau=tau;
-        this->m=m;
+        gamma_  = gamma;
+        tau_    = tau;
+        m_      = m;
+        mprime_ = m/(m-1);
 
-        mprime = m/(m-1);
+        vx_=new double[n1*n2];
+        vy_=new double[n1*n2];
 
-        vx=new double[n1*n2];
-        vy=new double[n1*n2];
+        vxx_=new double[n1*n2];
+        vyy_=new double[n1*n2];
+        vxy_=new double[n1*n2];
 
-        vxx=new double[n1*n2];
-        vyy=new double[n1*n2];
-        vxy=new double[n1*n2];
+        phi_=new double[n1*n2];
+        psi_=new double[n1*n2];
 
-        phi=new double[n1*n2];
-        psi=new double[n1*n2];
+        push_mu_=new double[n1*n2];
 
-        push_mu=new double[n1*n2];
-
-        // pushforward = new Pushforward_mapping(n1,n2);
-
-        flt2d = new FLT2D(n1,n2);
+        flt2d_         = new FLT2D(n1,n2);
+        fast_marching_ = new Fast_Marching(n1,n2);
 
         clock_t time;
         time=clock();
-        fftps = new poisson_solver(n1,n2);
+        fftps_ = new poisson_solver(n1,n2);
         time=clock()-time;
         printf ("\nCPU time for FFT: %f seconds.\n\n",((float)time)/CLOCKS_PER_SEC);
     }
 
     ~BackAndForth(){
-        delete[] vx;
-        delete[] vy;
-        delete[] vxx;
-        delete[] vyy;
-        delete[] vxy;
-        delete[] phi;
-        delete[] psi;
-        delete[] push_mu;
+        delete[] vx_;
+        delete[] vy_;
+        delete[] vxx_;
+        delete[] vyy_;
+        delete[] vxy_;
+        delete[] phi_;
+        delete[] psi_;
+        delete[] push_mu_;
 
-        // delete pushforward;
-        delete flt2d;
-        delete fftps;
+        delete flt2d_;
+        delete fftps_;
+        delete fast_marching_;
     }
 
-    double calculate_WENO(const double a, const double b, const double c, const double d){
-        /* setting constants for WENO. The constants need to satisfy w0 + w1 + w2 = 1 */
-        double eps = 1e-6;
-        double IS0 = 13.0 * (a-b)*(a-b) + 3.0 * (a-3*b)*(a-3*b);
-        double IS1 = 13.0 * (b-c)*(b-c) + 3.0 * (b+c)*(b+c);
-        double IS2 = 13.0 * (c-d)*(c-d) + 3.0 * (3*c-d)*(3*c-d);
-        double alpha0 = 1.0/((eps + IS0)*(eps + IS0));
-        double alpha1 = 6.0/((eps + IS1)*(eps + IS1));
-        double alpha2 = 3.0/((eps + IS2)*(eps + IS2));
-        double w0 = alpha0 / (alpha0 + alpha1 + alpha2);
-        double w2 = alpha2 / (alpha0 + alpha1 + alpha2);
-
-        /* return the value */
-        return w0/3.0 * (a - 2.0 * b + c) + (w2 - 0.5)/6.0 * (b - 2.0 * c + d);
-    }
-
-    double calculate_gradx_WENO(const double* phi, const int i, const int j){
-        double phi_j_pre_2  = phi[i*n1+ (int)fmax(0,j-2)];
-        double phi_j_pre_1  = phi[i*n1+ (int)fmax(0,j-1)];
-        double phi_j        = phi[i*n1+j];
-        double phi_j_post_1 = phi[i*n1+ (int)fmin(n1-1,j+1)];
-        double phi_j_post_2 = phi[i*n1+ (int)fmin(n1-1,j+2)];
-        double phi_j_post_3 = phi[i*n1+ (int)fmin(n1-1,j+3)];
-        double eval = n1/12.0 * (
-                                 -         (phi_j_pre_1  - phi_j_pre_2)
-                                 + 7.0  *  (phi_j        - phi_j_pre_1)
-                                 + 7.0  *  (phi_j_post_1 - phi_j)
-                                 -         (phi_j_post_2 - phi_j_post_1)
-                                );
-        double a = n1 * (phi_j_post_3 - 2.0 * phi_j_post_2 + phi_j_post_1);
-        double b = n1 * (phi_j_post_2 - 2.0 * phi_j_post_1 + phi_j);
-        double c = n1 * (phi_j_post_1 - 2.0 * phi_j + phi_j_pre_1);
-        double d = n1 * (phi_j - 2.0 * phi_j_pre_1  + phi_j_pre_2);
-        eval += calculate_WENO(a,b,c,d);
-        return eval;
-    }
-
-    double calculate_grady_WENO(const double* phi, const int i, const int j){
-        double phi_i_pre_2  = phi[(int)fmax(0,i-2)*n1+j];
-        double phi_i_pre_1  = phi[(int)fmax(0,i-1)*n1+j];
-        double phi_i        = phi[i*n1+j];
-        double phi_i_post_1 = phi[(int)fmin(n2-1,i+1)*n1+j];
-        double phi_i_post_2 = phi[(int)fmin(n2-1,i+2)*n1+j];
-        double phi_i_post_3 = phi[(int)fmin(n2-1,i+3)*n1+j];
-        double eval = n2/12.0 * (
-                                 -         (phi_i_pre_1  - phi_i_pre_2)
-                                 + 7.0  *  (phi_i        - phi_i_pre_1)
-                                 + 7.0  *  (phi_i_post_1 - phi_i)
-                                 -         (phi_i_post_2 - phi_i_post_1)
-                                );
-        double a = n2 * (phi_i_post_3 - 2.0 * phi_i_post_2 + phi_i_post_1);
-        double b = n2 * (phi_i_post_2 - 2.0 * phi_i_post_1 + phi_i);
-        double c = n2 * (phi_i_post_1 - 2.0 * phi_i + phi_i_pre_1);
-        double d = n2 * (phi_i - 2.0 * phi_i_pre_1  + phi_i_pre_2);
-        eval += calculate_WENO(a,b,c,d);
-        return eval;
-    }
-
-    double calculate_gradx_WENO_(const double* phi, const int i, const int j){
-        double phi_j_pre_3  = phi[i*n1+ (int)fmax(0,j-3)];
-        double phi_j_pre_2  = phi[i*n1+ (int)fmax(0,j-2)];
-        double phi_j_pre_1  = phi[i*n1+ (int)fmax(0,j-1)];
-        double phi_j        = phi[i*n1+j];
-        double phi_j_post_1 = phi[i*n1+ (int)fmin(n1-1,j+1)];
-        double phi_j_post_2 = phi[i*n1+ (int)fmin(n1-1,j+2)];
-        double eval = n1/12.0 * (
-                                 -         (phi_j_pre_1  - phi_j_pre_2)
-                                 + 7.0  *  (phi_j        - phi_j_pre_1)
-                                 + 7.0  *  (phi_j_post_1 - phi_j)
-                                 -         (phi_j_post_2 - phi_j_post_1)
-                                );
-        double a = n1 * (phi_j_pre_1 - 2.0 * phi_j_pre_2 + phi_j_pre_3);
-        double b = n1 * (phi_j - 2.0 * phi_j_pre_1 + phi_j_pre_2);
-        double c = n1 * (phi_j_post_1 - 2.0 * phi_j + phi_j_pre_1);
-        double d = n1 * (phi_j_post_2 - 2.0 * phi_j_post_1 + phi_j);
-        eval -= calculate_WENO(a,b,c,d);
-        return eval;
-
-    }
-
-    double calculate_grady_WENO_(const double* phi, const int i, const int j){
-        double phi_i_pre_3  = phi[(int)fmax(0,i-3)*n1+j];
-        double phi_i_pre_2  = phi[(int)fmax(0,i-2)*n1+j];
-        double phi_i_pre_1  = phi[(int)fmax(0,i-1)*n1+j];
-        double phi_i        = phi[i*n1+j];
-        double phi_i_post_1 = phi[(int)fmin(n2-1,i+1)*n1+j];
-        double phi_i_post_2 = phi[(int)fmin(n2-1,i+2)*n1+j];
-        double eval = n2/12.0 * (
-                                 -         (phi_i_pre_1  - phi_i_pre_2)
-                                 + 7.0  *  (phi_i        - phi_i_pre_1)
-                                 + 7.0  *  (phi_i_post_1 - phi_i)
-                                 -         (phi_i_post_2 - phi_i_post_1)
-                                );
-        double a = n2 * (phi_i_pre_1 - 2.0 * phi_i_pre_2 + phi_i_pre_3);
-        double b = n2 * (phi_i - 2.0 * phi_i_pre_1 + phi_i_pre_2);
-        double c = n2 * (phi_i_post_1 - 2.0 * phi_i + phi_i_pre_1);
-        double d = n2 * (phi_i_post_2 - 2.0 * phi_i_post_1 + phi_i);
-        eval -= calculate_WENO(a,b,c,d);
-
-        return eval;
-
-        
-    }
-
-    double calculate_gradx_vx(const double* phi, const int i, const int j){
-        double phi_j_pre_3  = phi[i*n1+ (int)fmax(0,j-3)];
-        double phi_j_pre_2  = phi[i*n1+ (int)fmax(0,j-2)];
-        double phi_j_pre_1  = phi[i*n1+ (int)fmax(0,j-1)];
-        double phi_j        = phi[i*n1+j];
-        double phi_j_post_1 = phi[i*n1+ (int)fmin(n1-1,j+1)];
-        double phi_j_post_2 = phi[i*n1+ (int)fmin(n1-1,j+2)];
-        double phi_j_post_3 = phi[i*n1+ (int)fmin(n1-1,j+3)];
-
-        double eval = 3.0/4.0 * (phi_j_post_1 - phi_j_pre_1) - 3.0/20.0 * (phi_j_post_2 - phi_j_pre_2) + 1.0/60.0 * (phi_j_post_3 - phi_j_pre_3);
-        // double eval = 1.0/4.0 * ((phi_j_post_1 - phi_j_pre_1) + (phi_j_post_2 - phi_j_pre_2) + (phi_j_post_3 - phi_j_pre_3));
-
-        return 1.0*n1*eval;
-    }
-
-    double calculate_grady_vy(const double* phi, const int i, const int j){
-        double phi_i_pre_3  = phi[(int)fmax(0,i-3)*n1+j];
-        double phi_i_pre_2  = phi[(int)fmax(0,i-2)*n1+j];
-        double phi_i_pre_1  = phi[(int)fmax(0,i-1)*n1+j];
-        double phi_i        = phi[i*n1+j];
-        double phi_i_post_1 = phi[(int)fmin(n2-1,i+1)*n1+j];
-        double phi_i_post_2 = phi[(int)fmin(n2-1,i+2)*n1+j];
-        double phi_i_post_3 = phi[(int)fmin(n2-1,i+3)*n1+j];
-
-        double eval = 3.0/4.0 * (phi_i_post_1 - phi_i_pre_1) - 3.0/20.0 * (phi_i_post_2 - phi_i_pre_2) + 1.0/60.0 * (phi_i_post_3 - phi_i_pre_3);
-        // double eval = 1.0/4.0 * ((phi_i_post_1 - phi_i_pre_1) + (phi_i_post_2 - phi_i_pre_2) + (phi_i_post_3 - phi_i_pre_3));
-
-        return 1.0*n2*eval;
-        
-    }
-
-    void calculate_gradient2(const double* phi, double* vx, double* vy){
-        for(int i=0;i<n2;++i){
-            for(int j=0;j<n1;++j){
-                // vx[i*n1+j] = calculate_gradx_WENO(phi, i, j);
-                // vy[i*n1+j] = calculate_grady_WENO(phi, i, j);
-                vx[i*n1+j] = calculate_gradx_vx(phi, i, j);
-                vy[i*n1+j] = calculate_grady_vy(phi, i, j);
-            }
-        }
-    }
-
-    void calculate_gradient(const double* phi_c, double* vx, double* vy){
-
-        /* forward difference */
-        // for(int i=0;i<n2;++i){
-        //     for(int j=0;j<n1-1;++j){
-        //         vx[i*n1+j]=1.0*n1*(phi_c[i*n1+j+1]-phi_c[i*n1+j]);
-        //     }
-        // }
-        // for(int j=0;j<n1;++j){
-        //     for(int i=0;i<n2-1;++i){
-        //         vy[i*n1+j]=1.0*n2*(phi_c[(i+1)*n1+j]-phi_c[i*n1+j]);
-        //     }
-        // }
-
+    void calculate_gradient(double* vx, double* vy, const double* phi_c){
         /* centered difference*/
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
@@ -418,7 +127,7 @@ public:
         }
     }
 
-    double calculate_dual_value(Helper_E& helper_f, const double* phi, const double* psi, const double* mu){
+    double calculate_dual_value(Helper_U& helper_f, const double* phi, const double* psi, const double* mu){
 
          // Here psi is assumed to correspond to the c-transform of phi
         int pcount=n1*n2;
@@ -428,7 +137,7 @@ public:
 
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
-                term1 += helper_f.calculate_E(phi,i,j);
+                term1 += helper_f.calculate_U(phi,i,j);
             }
         }
 
@@ -445,11 +154,11 @@ public:
         return term2 - term1;
     }
 
-    double calculate_h_minus_1(poisson_solver* fftps, const double* push_mu, const double* DEstar){
+    double calculate_h_minus_1(const double* push_mu, const double* DUstar_){
         double error=0;
         for(int i=0;i<n1*n2;++i){
-            double value=-push_mu[i]+DEstar[i];
-            error+=value*fftps->workspace[i];
+            double value=-push_mu[i]+DUstar_[i];
+            error+=value*fftps_->workspace[i];
         }
         return error/(1.0*n1*n2);
     }
@@ -460,11 +169,9 @@ public:
         return error/(1.0*n1*n2);
     }
 
-    void calculate_push_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy){
+    void calculate_push_rho(double* push_rho, const double* rho, const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy){
 
         double eps = pow(1.0/n1, 0.7);
-
-        double xpost,ypost,xpre,ypre;
 
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
@@ -472,8 +179,8 @@ public:
                 double vxval=vx[i*n1+j];
                 double vyval=vy[i*n1+j];
 
-                double x=(j+0.5)/(1.0*n1)-tau*vxval;
-                double y=(i+0.5)/(1.0*n2)-tau*vyval;
+                double x=(j+0.5)/(1.0*n1)-tau_*vxval;
+                double y=(i+0.5)/(1.0*n2)-tau_*vyval;
 
                 double rhovalue=interpolate_function(x,y,rho);
 
@@ -483,24 +190,9 @@ public:
                     double vyy_val = interpolate_function(x,y,vyy);
                     double vxy_val = interpolate_function(x,y,vxy);
 
-                    // push_rho[i*n1+j]=rhovalue/fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy)); 
-                    double det = fabs((1.0-tau*vxx_val) * (1.0-tau*vyy_val) - tau*tau * vxy_val * vxy_val);
-                    // double det = fabs((1.0-tau*gradx_vx) * (1.0-tau*grady_vy));
+                    double det = fabs((1.0-tau_*vxx_val) * (1.0-tau_*vyy_val) - tau_*tau_ * vxy_val * vxy_val);
                     det = fmax(eps,det);
                     push_rho[i*n1+j] = rhovalue/det;
-
-
-                ////////////////////////////////////
-                    // double vxval_post=vx[i*n1+(int)fmin(n1-1,j+1)];
-                    // double vyval_post=vy[(int)fmin(n2-1,i+1)*n1+j];
-
-                    // double gradx_vx=1.0*n1*(vxval_post-vxval);
-                    // double grady_vy=1.0*n2*(vyval_post-vyval);
-
-                    // double gradx_vx=calculate_gradx_WENO_(vx, i, j);
-                    // double grady_vy=calculate_grady_WENO_(vy, i, j);
-                ////////////////////////////////////
-
                     
                 }else{
                     push_rho[i*n1+j]=0;
@@ -510,11 +202,9 @@ public:
         }
     }
 
-    void calculate_pull_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy){
+    void calculate_pull_rho(double* push_rho, const double* rho, const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy){
 
         double eps = pow(1.0/n1, 0.7);
-
-        double xpost,ypost,xpre,ypre;
 
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
@@ -522,8 +212,8 @@ public:
                 double vxval=vx[i*n1+j];
                 double vyval=vy[i*n1+j];
 
-                double x=(j+0.5)/(1.0*n1)-tau*vxval;
-                double y=(i+0.5)/(1.0*n2)-tau*vyval;
+                double x=(j+0.5)/(1.0*n1)-tau_*vxval;
+                double y=(i+0.5)/(1.0*n2)-tau_*vyval;
 
                 double rhovalue=interpolate_function(x,y,rho);
 
@@ -532,7 +222,7 @@ public:
                     double vyy_val = vyy[i*n1+j];
                     double vxy_val = vxy[i*n1+j];
 
-                    double det = fabs((1.0-tau*vxx_val) * (1.0-tau*vyy_val) - tau*tau * vxy_val * vxy_val);
+                    double det = fabs((1.0-tau_*vxx_val) * (1.0-tau_*vyy_val) - tau_*tau_ * vxy_val * vxy_val);
                     det = fmin(1.0/eps, det);
                     push_rho[i*n1+j] = rhovalue*det;
                     
@@ -545,12 +235,11 @@ public:
     }
 
 
-    void calculate_push_rho(const double* rho, double* push_rho,const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy,const double* phi){
+    void calculate_push_rho(double* push_rho, const double* rho, const double* vx,const double* vy,const double* vxx,const double* vyy,const double* vxy,const double* phi){
 
         double eps = pow(1.0/n1, 0.7);
         double det_threshold = 0.99;
 
-        double xpost,ypost,xpre,ypre;
 
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
@@ -558,8 +247,8 @@ public:
                 double vxval=vx[i*n1+j];
                 double vyval=vy[i*n1+j];
 
-                double x=(j+0.5)/(1.0*n1)-tau*vxval;
-                double y=(i+0.5)/(1.0*n2)-tau*vyval;
+                double x=(j+0.5)/(1.0*n1)-tau_*vxval;
+                double y=(i+0.5)/(1.0*n2)-tau_*vyval;
 
                 double rhovalue=interpolate_function(x,y,rho);
 
@@ -569,7 +258,7 @@ public:
                     double vyy_val = interpolate_function(x,y,vyy);
                     double vxy_val = interpolate_function(x,y,vxy);
 
-                    double det = fabs((1.0-tau*vxx_val) * (1.0-tau*vyy_val) - tau*tau * vxy_val * vxy_val);
+                    double det = fabs((1.0-tau_*vxx_val) * (1.0-tau_*vyy_val) - tau_*tau_ * vxy_val * vxy_val);
 
                     if(det > det_threshold){
                         push_rho[i*n1+j] = rhovalue/det;    
@@ -588,7 +277,7 @@ public:
                         vyy_val = 0.25*n2*n2* (phi[ipp*n1+j] - 2.*phi[i*n1+j] + phi[imm*n1+j]);
                         vxy_val = 0.25*n1*n2* (phi[ip*n1+jp] - phi[ip*n1+jm] - phi[im*n1+jp] + phi[im*n1+jm]);
 
-                        det = fabs((1.0-tau*vxx_val) * (1.0-tau*vyy_val) - tau*tau * vxy_val * vxy_val);
+                        det = fabs((1.0-tau_*vxx_val) * (1.0-tau_*vyy_val) - tau_*tau_ * vxy_val * vxy_val);
                         det = fmin(1.0/eps, det);
                         push_rho[i*n1+j] = rhovalue*det;    
                     }
@@ -652,17 +341,17 @@ public:
     /**
         Update sigma based on Goldstein scheme
     */
-    double update_sigma(double sigma, const double W2_value, const double W2_value_previous, const double error){
+    double update_sigma(const double sigma, const double W2_value, const double W2_value_previous, const double error){
 
-        if(W2_value_previous-W2_value>-beta_1*error){
-            return alpha_2;
-        }else if(W2_value_previous-W2_value<-beta_2*error){
-            return alpha_1;
+        if(W2_value_previous-W2_value>-beta_1_*error){
+            return alpha_2_;
+        }else if(W2_value_previous-W2_value<-beta_2_*error){
+            return alpha_1_;
         }
         return 1;
     }
 
-    void calculate_gradient_vxx_vyy_vxy(const double* phi, double* vxx, double* vyy, double* vxy){
+    void calculate_gradient_vxx_vyy_vxy(double* vxx, double* vyy, double* vxy, const double* phi){
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
                 int jpp = fmin(n1-1,j+2);
@@ -682,37 +371,36 @@ public:
         }
     }
 
-    double perform_OT_iteration_back_det(Helper_E& helper_f,double& sigma,double& W2_value,const double* mu, const int iter){
+    double perform_OT_iteration_back_det(Helper_U& helper_f,double& sigma,double& W2_value,const double* mu, const int iter){
         // ------------------------------------------------------------
         // double W2_value_previous = 0;
         double error_nu = 0;
 
-        flt2d->find_c_concave(psi,phi,tau);
-        flt2d->find_c_concave(phi,psi,tau);
+        flt2d_->find_c_concave(psi_,phi_,tau_);
+        flt2d_->find_c_concave(phi_,psi_,tau_);
     
-        helper_f.calculate_DEstar_normalized(phi);    
+        helper_f.calculate_DUstar_normalized(phi_);    
 
-        calculate_gradient(psi, vx, vy);
+        calculate_gradient(vx_, vy_, psi_);
+        calculate_gradient_vxx_vyy_vxy(vxx_, vyy_, vxy_, phi_);
 
-        calculate_gradient_vxx_vyy_vxy(phi, vxx, vyy, vxy);
-        calculate_push_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy,psi);
+        // pushforward helper_f.DUstar_ -> push_mu_
+        calculate_push_rho(push_mu_, helper_f.DUstar_, vx_, vy_, vxx_, vyy_, vxy_, psi_);
 
-        // calculate_gradient_vxx_vyy_vxy(psi, vxx, vyy, vxy);
-        // calculate_pull_rho(helper_f.DEstar, push_mu,vx,vy,vxx,vyy,vxy);       
-
-        fftps->perform_inverse_laplacian(push_mu,mu,psi_c1,psi_c2,sigma);
+        fftps_->perform_inverse_laplacian(push_mu_, mu, psi_c1_, psi_c2_, sigma);
 
         // W2_value_previous=calculate_dual_value(helper_f,phi,psi,mu);
         // error_nu=calculate_h_minus_1(fftps,push_mu,mu);
-        error_nu=calculate_L1_error(push_mu,mu);
+
+        error_nu=calculate_L1_error(push_mu_,mu);
 
         for(int i=0;i<n1*n2;++i){
-            psi[i] += fftps->workspace[i];
+            psi_[i] += fftps_->workspace[i];
         }
 
-        flt2d->find_c_concave(psi,phi,tau);
+        flt2d_->find_c_concave(psi_,phi_,tau_);
 
-        W2_value=calculate_dual_value(helper_f,phi,psi,mu);
+        W2_value=calculate_dual_value(helper_f,phi_,psi_,mu);
 
         // sigma = update_sigma(sigma, W2_value, W2_value_previous, error_nu);
 
@@ -720,39 +408,40 @@ public:
     }
 
 
-    double perform_OT_iteration_forth_det(Helper_E& helper_f,double& sigma,double& W2_value,const double* mu, const int iter){
+    double perform_OT_iteration_forth_det(Helper_U& helper_f,double& sigma,double& W2_value,const double* mu, const int iter){
         // ------------------------------------------------------------
         // double W2_value_previous = 0;
         double error_mu = 0;
 
-        flt2d->find_c_concave(phi,psi,tau);
-        flt2d->find_c_concave(psi,phi,tau);
+        flt2d_->find_c_concave(phi_,psi_,tau_);
+        flt2d_->find_c_concave(psi_,phi_,tau_);
             
-        calculate_gradient(phi, vx, vy);
+        calculate_gradient(vx_, vy_, phi_);
+        calculate_gradient_vxx_vyy_vxy(vxx_, vyy_, vxy_, psi_);
 
-        calculate_gradient_vxx_vyy_vxy(psi, vxx, vyy, vxy);
-        calculate_push_rho(mu, push_mu,vx,vy,vxx,vyy,vxy,phi);
+        // pushforward mu -> push_mu_
+        calculate_push_rho(push_mu_, mu, vx_, vy_, vxx_, vyy_, vxy_, phi_);
 
-        // calculate_gradient_vxx_vyy_vxy(phi, vxx, vyy, vxy);
-        // calculate_pull_rho(mu, push_mu,vx,vy,vxx,vyy,vxy);    
+        // calculate_gradient_vxx_vyy_vxy(phi, vxx_, vyy_, vxy_);
+        // calculate_pull_rho(mu, push_mu,vx,vy,vxx_,vyy_,vxy_);    
             
-        helper_f.calculate_DEstar_normalized(phi);    
+        helper_f.calculate_DUstar_normalized(phi_);    
 
-        fftps->perform_inverse_laplacian(push_mu,helper_f.DEstar,phi_c1,phi_c2,sigma);
+        fftps_->perform_inverse_laplacian(push_mu_, helper_f.DUstar_, phi_c1_, phi_c2_, sigma);
 
 
         // W2_value_previous=calculate_dual_value(helper_f,phi,psi,mu);
-        // error_mu=calculate_h_minus_1(fftps,push_mu,helper_f.DEstar);
-        error_mu=calculate_L1_error(push_mu,helper_f.DEstar);
+        // error_mu=calculate_h_minus_1(fftps,push_mu,helper_f.DUstar_);
+        error_mu=calculate_L1_error(push_mu_, helper_f.DUstar_);
 
         for(int i=0;i<n1*n2;++i){
-            phi[i] += fftps->workspace[i];
+            phi_[i] += fftps_->workspace[i];
         }
 
 
-        flt2d->find_c_concave(phi,psi,tau);
+        flt2d_->find_c_concave(phi_,psi_,tau_);
 
-        W2_value=calculate_dual_value(helper_f,phi,psi,mu);
+        W2_value=calculate_dual_value(helper_f,phi_,psi_,mu);
 
         // sigma = update_sigma(sigma, W2_value, W2_value_previous, error_mu);
 
@@ -764,7 +453,7 @@ public:
     void display_iteration(const int iter,const double W2_value,const double error_mu,const double error_nu, const double C_phi, const double C_psi, const double infgradphi) const{
         cout << setprecision(6);
         cout << fixed;
-        cout <<setw(5)<<iter+1 << " C : " << C_phi << "  infgradphi : " << infgradphi << "  c1 : " << phi_c1 << " " << psi_c1 << " coeff : " << setw(10) << phi_c2/phi_c1 << " " << setw(6) << psi_c2/psi_c1 << "  W2 : " << scientific << setw(13) << W2_value << "  L1 error : "<<scientific<<setw(13) << error_mu << " " << error_nu<<"\n";
+        cout <<setw(5)<<iter+1 << " C : " << C_phi << "  infgradphi : " << infgradphi << "  c1 : " << phi_c1_ << " " << psi_c1_ << " coeff : " << setw(10) << phi_c2_/phi_c1_ << " " << setw(6) << psi_c2_/psi_c1_ << "  W2 : " << scientific << setw(13) << W2_value << "  L1 error : "<<scientific<<setw(13) << error_mu << " " << error_nu<<"\n";
     }
 
     /**
@@ -775,29 +464,28 @@ public:
         
         for(int i=0;i<n1*n2;++i){
             if(nu[i] >= 0){
-                phimax = fmax(phimax,-phi[i]-nu[i]);    
+                phimax = fmax(phimax,-phi_[i]-nu[i]);    
             }
         }
         if(phimax > 1) return 0.1;
-        return phimax * 0.1;
 
-        // return fmax(0.1,phimax * 0.2);
+        return fmax(0.1,phimax * 0.1);
     }
 
     /**
         Calculate infgradphi = inf(|nabla phi|)
     */
-    double calculate_infgradphi_on_level_set(const double lambda, const double* nu){
+    double calculate_infgradphi_on_level_set(const double lambda, const double* V){
 
         double infgradphi= 10000;
         int count = 0;
         for(int i=1;i<n2-1;++i){
             for(int j=1;j<n1-1;++j){
                 // if(fabs(fabs(phi[i*n1+j]/lambda) - 1)  < 1e-2){
-                if(nu[i*n1+j] >= 0 && nu[i*n1+j+1] >= 0 && nu[(i+1)*n1+j] >= 0  && nu[i*n1+j-1] >= 0 && nu[(i-1)*n1+j] >= 0){
-                    if(-phi[i*n1+j]-nu[i*n1+j] > 0 && -phi[i*n1+j]-nu[i*n1+j] < lambda){
-                        double gradxphi = 0.5*n1*(phi[i*n1+j+1]-phi[i*n1+j-1]-nu[i*n1+j+1]+nu[i*n1+j-1]);
-                        double gradyphi = 0.5*n2*(phi[(i+1)*n1+j]-phi[(i-1)*n1+j]-nu[(i+1)*n1+j]+nu[(i-1)*n1+j]);
+                if(V[i*n1+j] >= 0 && V[i*n1+j+1] >= 0 && V[(i+1)*n1+j] >= 0  && V[i*n1+j-1] >= 0 && V[(i-1)*n1+j] >= 0){
+                    if(-phi_[i*n1+j]-V[i*n1+j] > 0 && -phi_[i*n1+j]-V[i*n1+j] < lambda){
+                        double gradxphi = 0.5*n1*(phi_[i*n1+j+1]-phi_[i*n1+j-1]-V[i*n1+j+1]+V[i*n1+j-1]);
+                        double gradyphi = 0.5*n2*(phi_[(i+1)*n1+j]-phi_[(i-1)*n1+j]-V[(i+1)*n1+j]+V[(i-1)*n1+j]);
                         double eval = gradxphi*gradxphi + gradyphi*gradyphi;
 
                         if(count == 0) {
@@ -816,8 +504,8 @@ public:
     }
 
     void set_coeff_m_2(double& c1, double& c2, const double mu_max, const double C_c_transform){
-        c1 = 1/gamma;
-        c2 = C_c_transform * tau;
+        c1 = 1/gamma_;
+        c2 = C_c_transform * tau_;
     }
 
     void set_coeff(double& c1, double& c2, const double C, const double mu_max, const double d1, const double d2, const double d3, const bool verbose, const double C_c_transform){
@@ -825,36 +513,51 @@ public:
         // c2 = C * d1 + C_c_transform * tau;
 
         c1 = d3 * C * d1 + d2;
-        c2 = d3 * C * d1 + C_c_transform * tau;
+        c2 = d3 * C * d1 + C_c_transform * tau_;
     }
 
-    void initialize_phi(Helper_E& helper_f,const double* mu){
+    void initialize_phi(Helper_U& helper_f,const double* mu){
+
         for(int i=0;i<n1*n2;++i){
-            if(helper_f.nu[i] >= 0){
-                phi[i] = - (gamma * pow(mu[i],m-1) + helper_f.nu[i]);
+            if(helper_f.obstacle_[i] == 0){
+                phi_[i] = - (gamma_ * pow(mu[i],m_-1) + helper_f.obstacle_[i]);
             } else {
-                phi[i] = 0;
+                phi_[i] = 0;
             }
         }
+
+        for(int i=0;i<n2;i++){
+            for(int j=0;j<n1;j++){
+                if(mu[i*n1+j] > 0){
+                    push_mu_[i*n1+j]=0;
+                }else{
+                    push_mu_[i*n1+j]=FLT_MAX;
+                }
+            }
+        }
+
+        fast_marching_->run(push_mu_, sqrt(2));
+
+        for(int i=0;i<n2;++i){
+            for(int j=0;j<n1;++j){
+                
+                
+                if(mu[i*n1+j] < 0){
+                    phi_[i*n1+j] = 2 * push_mu_[i*n1+j]*push_mu_[i*n1+j];
+                    if(helper_f.obstacle_[i*n1+j] == 0) phi_[i*n1+j] -= helper_f.V_[i*n1+j];
+                }
+            }
+        }
+
+        // heat equation
+        fftps_->solve_heat_equation(phi_,0.01);
     }
 
     void calculate_d1_d2_d3(double& d1, double& d2, double& d3, const double lambda, const double infgradphi, const double* nu){
-        // double area = 0;
-        // for(int i=0;i<n1*n2;++i){
-        //     if(nu[i] >= 0){
-        //         if(-phi[i]-nu[i] > lambda){
-        //             area += 1;
-        //         }    
-        //     }
-        // }
-        // area /= n1*n2;
-        
-        double eval = 1.0 / pow(gamma, mprime - 1);
+        double eval = 1.0 / pow(gamma_, mprime_ - 1);
 
-        d1 = eval * pow(lambda, mprime-1) / infgradphi;
-        d2 = eval * pow(lambda, mprime-2) * (mprime - 1);
-
-        // cout << "d1 : " << d1 << " d2 : " << d2 << "\n";
+        d1 = eval * pow(lambda, mprime_-1) / infgradphi;
+        d2 = eval * pow(lambda, mprime_-2) * (mprime_ - 1);
     }
 
     void calculate_c_transform_constant(double& C, const double* phi, const double* mu){
@@ -868,8 +571,8 @@ public:
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
 
-                double x = (j+0.5)/n1 - tau * vx[i*n1+j];
-                double y = (i+0.5)/n2 - tau * vy[i*n1+j];
+                double x = (j+0.5)/n1 - tau_ * vx_[i*n1+j];
+                double y = (i+0.5)/n2 - tau_ * vy_[i*n1+j];
                 // double mu_val = interpolate_function(x,y,mu);
                 double mu_val = 1;
 
@@ -877,13 +580,13 @@ public:
                     /* calculate eigen values */
 
                     /* calculate trace */
-                    double trace = fabs(2 - tau*vxx[i*n1+j] - tau*vyy[i*n1+j]);
+                    double trace = fabs(2 - tau_*vxx_[i*n1+j] - tau_*vyy_[i*n1+j]);
                     /* calculate det */
-                    double det   = fabs((1.0-tau*vxx[i*n1+j]) * (1.0-tau*vyy[i*n1+j]) - tau*tau * vxy[i*n1+j] * vxy[i*n1+j]);
+                    double det   = fabs((1.0-tau_*vxx_[i*n1+j]) * (1.0-tau_*vyy_[i*n1+j]) - tau_*tau_ * vxy_[i*n1+j] * vxy_[i*n1+j]);
 
 
-                    double t1 = 0.5 * fabs(tau + sqrt(fabs(tau*tau - 4 * det)));
-                    double t2 = 0.5 * fabs(tau - sqrt(fabs(tau*tau - 4 * det)));
+                    double t1 = 0.5 * fabs(tau_ + sqrt(fabs(tau_*tau_ - 4 * det)));
+                    double t2 = 0.5 * fabs(tau_ - sqrt(fabs(tau_*tau_ - 4 * det)));
 
                     
                     C = fmax(C, mu_val*fmax(t1,t2));
@@ -894,7 +597,7 @@ public:
         C *= mu_max;
     }
 
-    void start_OT(Helper_E& helper_f, const double* mu, const int outer_iter, Initializer& init){
+    void start_OT(Helper_U& helper_f, const double* mu, const int outer_iter, Initializer& init){
 
         const int skip = 50; // frequency of printout
 
@@ -906,10 +609,10 @@ public:
             Initialize coefficients for siga update
         */
 
-        beta_1 =0.1;
-        beta_2 =0.9;
-        alpha_1=1.1;
-        alpha_2=0.9;
+        beta_1_ =0.1;
+        beta_2_ =0.9;
+        alpha_1_=1.1;
+        alpha_2_=0.9;
 
         /*
             Initialize the tolerance based on tau^2
@@ -917,10 +620,8 @@ public:
 
         double mu_max = 1;
         for(int i=0;i<n1*n2;++i) mu_max = fmax(mu_max, mu[i]);
-        // double tol_modified = tolerance * mu_max *tau*tau;
-        double tol_modified = tolerance;
 
-        cout << "Iter : " << outer_iter + 1 << " Tolerance : " << tol_modified << "\n";
+        cout << "Iter : " << outer_iter + 1 << " Tolerance : " << tolerance_ << "\n";
 
         /*
             Initialize the coefficients for fftps
@@ -937,52 +638,39 @@ public:
 
         double C_c_transform = 1;
 
-        
-        
-        double max_iteration_tmp = max_iteration;
-
         initialize_phi(helper_f,mu); // intiailize phi in the first outer iteration
         
         /*
             Starting the loop
         */
         
-        for(int iter = 0; iter < max_iteration_tmp; ++iter){
+        for(int iter = 0; iter < max_iteration_; ++iter){
             
             /* 
                 Calculating the relative error
             */
 
             if(iter % 1 == 0 && iter >= 0){
-                if(m == 2){
-                    calculate_c_transform_constant(C_c_transform, phi, mu);
-                    set_coeff_m_2(phi_c1, phi_c2, mu_max, C_c_transform);
-                    calculate_c_transform_constant(C_c_transform, psi, helper_f.DEstar);
-                    set_coeff_m_2(psi_c1, psi_c2, mu_max, C_c_transform);    
+                if(m_ == 2){
+                    calculate_c_transform_constant(C_c_transform, phi_, mu);
+                    set_coeff_m_2(phi_c1_, phi_c2_, mu_max, C_c_transform);
+                    calculate_c_transform_constant(C_c_transform, psi_, helper_f.DUstar_);
+                    set_coeff_m_2(psi_c1_, psi_c2_, mu_max, C_c_transform);    
                 }else{
-                    lambda = calculate_lambda(helper_f.nu);
-                    infgradphi = calculate_infgradphi_on_level_set(lambda,helper_f.nu);
-                    calculate_d1_d2_d3(d1, d2, d3, lambda, infgradphi, helper_f.nu);
+                    lambda = calculate_lambda(helper_f.V_);
+                    infgradphi = calculate_infgradphi_on_level_set(lambda,helper_f.V_);
+                    calculate_d1_d2_d3(d1, d2, d3, lambda, infgradphi, helper_f.V_);
                     
 
                     // C_phi = fmax(0.15,fmin(0.3,C_phi/sigma_forth));
                     // C_psi = fmax(0.15,fmin(0.3,C_psi/sigma_back));
 
                     d3 = pow(1.05,(iter+1)/100);
-                    calculate_c_transform_constant(C_c_transform, phi, mu);
-                    set_coeff(phi_c1, phi_c2, C_phi, mu_max, d1, d2, d3, false, C_c_transform);
-                    calculate_c_transform_constant(C_c_transform, psi, helper_f.DEstar);
-                    set_coeff(psi_c1, psi_c2, C_psi, mu_max, d1, d2, d3, false, C_c_transform);    
+                    calculate_c_transform_constant(C_c_transform, phi_, mu);
+                    set_coeff(phi_c1_, phi_c2_, C_phi_, mu_max, d1, d2, d3, false, C_c_transform);
+                    calculate_c_transform_constant(C_c_transform, psi_, helper_f.DUstar_);
+                    set_coeff(psi_c1_, psi_c2_, C_psi_, mu_max, d1, d2, d3, false, C_c_transform);    
                 }
-            }
-
-            if(outer_iter==0 && iter < 10){
-            
-                phi_c1 = 0.1;
-                psi_c1 = 0.1;
-
-                phi_c2 = 0.1;
-                psi_c2 = 0.1;            
             }
 
             /*
@@ -992,8 +680,8 @@ public:
             sigma_forth = 1;
             sigma_back  = 1;
             
-            error_mu = perform_OT_iteration_forth_det(helper_f,sigma_forth,W2_value,mu,iter);
-            error_nu = perform_OT_iteration_back_det(helper_f,sigma_back,W2_value,mu,iter);
+            error_mu = perform_OT_iteration_forth_det(helper_f,sigma_forth,W2_value_,mu,iter);
+            error_nu = perform_OT_iteration_back_det (helper_f,sigma_back, W2_value_,mu,iter);
             
             error=fmin(error_mu,error_nu);
 
@@ -1001,11 +689,10 @@ public:
                 Stopping Condition 
             */
 
-            // if(W2_value>0 && ((abs(error)<tolerance && iter>=0) || iter==max_iteration-1 || sigma_forth <1e-9) ){
-            if(((abs(error)<tol_modified && abs(error)>0 && iter>=0) || iter==max_iteration_tmp-1) ){
+            if(((abs(error)<tolerance_ && abs(error)>0 && iter>=0) || iter==max_iteration_-1) ){
                 // cout << "error : " << error << " iter : " << iter << "\n";
                 // cout<<"Tolerance met!"<<"\n";
-                display_iteration(iter,W2_value,error_mu,error_nu,C_phi,C_psi,infgradphi);
+                display_iteration(iter,W2_value_,error_mu,error_nu,C_phi_,C_psi_,infgradphi);
                 break;
             }
 
@@ -1017,12 +704,12 @@ public:
 
             if(iter%skip==skip-1){
                 // cout<<"|";
-                display_iteration(iter,W2_value,error_mu,error_nu,C_phi,C_psi,infgradphi);
+                display_iteration(iter,W2_value_,error_mu,error_nu,C_phi_,C_psi_,infgradphi);
 
                 string figurename = "output";
-                for(int i=0;i<n1*n2;++i) push_mu[i] = fabs(push_mu[i] - mu[i]);
-                init.save_image_opencv(push_mu,figurename,(iter+1)/skip, mu_max);
-                // init.save_image_opencv(helper_f.DEstar,figurename,(iter+1)/skip, mu_max);
+                for(int i=0;i<n1*n2;++i) push_mu_[i] = fabs(push_mu_[i] - mu[i]);
+                init.save_image_opencv(push_mu_, figurename,(iter+1)/skip, mu_max);
+                // init.save_image_opencv(helper_f.DUstar_,figurename,(iter+1)/skip, mu_max);
             }
         }
     }
@@ -1048,9 +735,6 @@ int main(int argc, char** argv){
     double C=stod(argv[9]);
     int plot=stoi(argv[10]);
 
-    double M = 1;
-
-
     cout << "n1   : " << n1 <<"\n";
     cout << "n2   : " << n2 <<"\n";
     cout << "nt   : " << nt <<"\n";
@@ -1069,7 +753,7 @@ int main(int argc, char** argv){
     /* Initialize Initializer */
     Initializer init(n1,n2);
 
-    create_csv_parameters(n1,n2,nt,tau,gamma,m,M);
+    create_csv_parameters(n1,n2,nt,tau,gamma,m);
 
     // Initialize mu
     double* mu=new double[n1*n2];
@@ -1086,31 +770,30 @@ int main(int argc, char** argv){
     printf("%s", ctime(&my_time));
     cout << "\n";
 
-    // unsigned char* obstacle = new unsigned char[n1*n2];
+    unsigned char* obstacle = new unsigned char[n1*n2];
 
     string data_folder = "data";
 
-    Helper_E helper_f(n1,n2,gamma,tau,m,M);
+    Helper_U helper_f(n1,n2,gamma,tau,m,mu);
 
     double a = 1;
-    init_entropy_sine(helper_f.nu, 5, 3, a, n1, n2);
+    init_entropy_sine(helper_f.V_, 5, 3, a, n1, n2);
 
     cout << "a for entropy sine : " << a << "\n";
-
 
     // init_obstacle_from_image(obstacle, n1, n2);
     // init_obstacle_two_moons(obstacle, n1, n2);
     // init_obstacle_pac_man(obstacle, n1, n2);
     // init_obstacle_circle(obstacle, n1, n2);
 
-    // init.init_entropy_image_obstacle_opencv(helper_f.nu, obstacle, data_folder);
+    helper_f.set_obstacle(obstacle);
 
     cout << setprecision(6);
 
     BackAndForth bf(n1,n2,max_iteration,tolerance,gamma,tau,m);
 
-    bf.C_phi = C;
-    bf.C_psi = C;
+    bf.C_phi_ = C;
+    bf.C_psi_ = C;
 
     string filename="./data/mu-"+to_string(0)+".csv";
     create_bin_file(mu,n1*n2,filename);
@@ -1128,9 +811,8 @@ int main(int argc, char** argv){
     for(int n=0;n<nt;++n){
 
         bf.start_OT(helper_f, mu, n, init);
-        // helper_f.calculate_DEstar(bf.phi);
-        helper_f.calculate_DEstar_normalized(bf.phi);
-        memcpy(mu,helper_f.DEstar,n1*n2*sizeof(double));
+        helper_f.calculate_DUstar_normalized(bf.phi_);
+        memcpy(mu,helper_f.DUstar_,n1*n2*sizeof(double));
 
         /* print out sum */
         sum=0; for(int i=0;i<n1*n2;++i) sum+=mu[i]; cout << "sum : " << sum/(n1*n2) << "\n";
