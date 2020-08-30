@@ -744,12 +744,6 @@ int main(int argc, char** argv){
     cout << "Max Iteration : " << max_iteration <<"\n";
     cout << "tolerance     : " << tolerance <<"\n";
 
-
-    /* modify gamma */
-    gamma = gamma * m /(m-1);
-
-    cout << "Modified gamma : " << gamma << "\n";
-
     /* Initialize Initializer */
     Initializer init(n1,n2);
 
