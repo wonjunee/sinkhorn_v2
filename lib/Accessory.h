@@ -272,12 +272,55 @@ void create_mu_from_image(double* mu,int n1,int n2){
     } 
 }
 
-// Quadratic potential V(x,y) = 1/2 a ( (x-xc)^2 + (y-yc)^2 )
-void init_entropy_quadratic(double* nu,double xc, double yc, double a, int n1, int n2){    
-    
+void create_mu_from_image2(double* mu,int n1,int n2){
+
     double nuSum=0;
     int pcount=n1*n2;
+
+    ifstream infile;
+    infile.open("../external-images/starobstacle_gray_512.dat");
+
+    double x;
+    int ind=0;
+    while(infile>>x){
+        mu[ind]=x;
+        nuSum+=x;
+        ind++;
+    }
+    infile.close();
+
+    double val = mu[n2/2*n1 + n1/2];
+
+    for(int i=0;i<n2;++i){
+        for(int j=0;j<n1;++j){
+            double x = (j+0.5)/n1;
+            double y = (i+0.5)/n2;
+
+            if(fabs(x-0.2)<0.1 && fabs(y-0.2)<0.1){
+                mu[i*n1+j] = val;
+            }
+
+            if(pow(x-0.2,2) + pow(y-0.8,2) < pow(0.1,2)){
+                mu[i*n1+j] = val;   
+            }
+
+            if(pow(x-0.8,2) + pow(y-0.2,2) < pow(0.1,2)){
+                mu[i*n1+j] = val;   
+            }
+
+            nuSum+=mu[i*n1+j];
+        }
+    }
+
+    nuSum/=pcount;
     
+    for(int k=0;k<pcount;k++){
+        mu[k]/=nuSum;
+    } 
+}
+
+// Quadratic potential V(x,y) = 1/2 a ( (x-xc)^2 + (y-yc)^2 )
+void init_entropy_quadratic(double* nu,double xc, double yc, double a, int n1, int n2){    
     for(int i=0;i<n2;i++){
         for(int j=0;j<n1;j++){
             
@@ -285,12 +328,8 @@ void init_entropy_quadratic(double* nu,double xc, double yc, double a, int n1, i
             double y=(i+.5)/(n2*1.0);
 
             nu[i*n1+j]=a*((x-xc)*(x-xc)+(y-yc)*(y-yc));
-            // nu[i*n1+j]=0;
-            nuSum+=nu[i*n1+j];
-            
         }
     }
-    nuSum/=pcount;
 }
 
 
@@ -522,8 +561,9 @@ void init_obstacle_from_image(unsigned char* obstacle, int n1, int n2){
 
     // Quadratic potential V = 1/2 a ( (x-xc)^2 + (y-yc)^2 )
 
-    Mat src = imread("../external-images/paw.png");
+    // Mat src = imread("../external-images/paw.png");
     // Mat src = imread("../external-images/two-moons.jpeg");
+    Mat src = imread("../external-images/starobstacle.png");
 
     Mat src_gray;
 
@@ -555,7 +595,7 @@ void init_obstacle_from_image(unsigned char* obstacle, int n1, int n2){
         for(int j=0;j<n1;++j){
             int a = (int) src_eroded.ptr<unsigned char>(i)[j];
 
-            if(a < 100){
+            if(a > 100){
                 obstacle[i*n1+j] = 255;
             }else{
                 obstacle[i*n1+j] = 0;

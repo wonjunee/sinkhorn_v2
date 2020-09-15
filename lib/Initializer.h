@@ -33,11 +33,11 @@ public:
 
     void save_image_opencv(const double* A, const string& filename, const int iter, double max_A = -1){
         string filename_iter = "./figures/" + filename;
-        filename_iter = filename_iter + "-" + to_string(iter);
-        filename_iter = filename_iter + ".png";
+        filename_iter = filename_iter + "-" + to_string(iter) + ".png";
 
         if(max_A < 0){
-            for(int i=0;i<n1*n2;++i) max_A = fmax(max_A, A[i]);    
+            max_A = A[0];
+            for(int i=1;i<n1*n2;++i) max_A = fmax(max_A, A[i]);    
         }
         
         for(int i=0;i<n1*n2;++i) ar[i] = (unsigned char) (A[i]/max_A * 255);
@@ -52,8 +52,7 @@ public:
 
     void save_image_opencv(const double* A,const unsigned char* obstacle,const string& filename, const int iter){
         string filename_iter = "./figures/" + filename;
-        filename_iter = filename_iter + "-" + to_string(iter);
-        filename_iter = filename_iter + ".png";
+        filename_iter = filename_iter + "-" + to_string(iter) + ".png";
 
         double max_A = 0;
         for(int i=0;i<n1*n2;++i) max_A = fmax(max_A, A[i]);

@@ -509,48 +509,40 @@ public:
     }
 
     void set_coeff(double& c1, double& c2, const double C, const double mu_max, const double d1, const double d2, const double d3, const bool verbose, const double C_c_transform){
-        // c1 = C * d1 + d2;
-        // c2 = C * d1 + C_c_transform * tau;
-
-        c1 = d3 * C * d1 + d2;
-        c2 = d3 * C * d1 + C_c_transform * tau_;
+        c1 = C * d1 + d2;
+        c2 = C * d1 + C_c_transform * tau_;
     }
 
     void initialize_phi(Helper_U& helper_f,const double* mu){
 
-        for(int i=0;i<n1*n2;++i){
-            if(helper_f.obstacle_[i] == 0){
-                phi_[i] = - (gamma_ * pow(mu[i],m_-1) + helper_f.obstacle_[i]);
-            } else {
-                phi_[i] = 0;
-            }
-        }
+        // for(int i=0;i<n1*n2;++i){
+        //     if(helper_f.obstacle_[i] == 0){
+        //         phi_[i] = - (gamma_ * pow(mu[i],m_-1) + helper_f.obstacle_[i]);
+        //     } else {
+        //         phi_[i] = 0;
+        //     }
+        // }
 
         for(int i=0;i<n2;i++){
             for(int j=0;j<n1;j++){
                 if(mu[i*n1+j] > 0){
                     push_mu_[i*n1+j]=0;
                 }else{
-                    push_mu_[i*n1+j]=FLT_MAX;
+                    push_mu_[i*n1+j]=-1000;
                 }
             }
         }
 
-        fast_marching_->run(push_mu_, sqrt(2));
+        flt2d_->find_c_concave(push_mu_, push_mu_, tau_);
 
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
-                
-                
-                if(mu[i*n1+j] < 0){
-                    phi_[i*n1+j] = 2 * push_mu_[i*n1+j]*push_mu_[i*n1+j];
-                    if(helper_f.obstacle_[i*n1+j] == 0) phi_[i*n1+j] -= helper_f.V_[i*n1+j];
-                }
+                if(mu[i*n1+j] <= 0) phi_[i*n1+j] = push_mu_[i*n1+j] - helper_f.V_[i*n1+j];
             }
         }
 
         // heat equation
-        fftps_->solve_heat_equation(phi_,0.01);
+        fftps_->solve_heat_equation(phi_,0.001);
     }
 
     void calculate_d1_d2_d3(double& d1, double& d2, double& d3, const double lambda, const double infgradphi, const double* nu){
@@ -573,8 +565,8 @@ public:
 
                 double x = (j+0.5)/n1 - tau_ * vx_[i*n1+j];
                 double y = (i+0.5)/n2 - tau_ * vy_[i*n1+j];
-                // double mu_val = interpolate_function(x,y,mu);
-                double mu_val = 1;
+
+                double mu_val = interpolate_function(x,y,mu);
 
                 if(mu_val > 0){
                     /* calculate eigen values */
@@ -585,8 +577,8 @@ public:
                     double det   = fabs((1.0-tau_*vxx_[i*n1+j]) * (1.0-tau_*vyy_[i*n1+j]) - tau_*tau_ * vxy_[i*n1+j] * vxy_[i*n1+j]);
 
 
-                    double t1 = 0.5 * fabs(tau_ + sqrt(fabs(tau_*tau_ - 4 * det)));
-                    double t2 = 0.5 * fabs(tau_ - sqrt(fabs(tau_*tau_ - 4 * det)));
+                    double t1 = 0.5 * fabs(trace + sqrt(fabs(trace*trace - 4 * det)));
+                    double t2 = 0.5 * fabs(trace - sqrt(fabs(trace*trace - 4 * det)));
 
                     
                     C = fmax(C, mu_val*fmax(t1,t2));
@@ -660,12 +652,7 @@ public:
                     lambda = calculate_lambda(helper_f.V_);
                     infgradphi = calculate_infgradphi_on_level_set(lambda,helper_f.V_);
                     calculate_d1_d2_d3(d1, d2, d3, lambda, infgradphi, helper_f.V_);
-                    
 
-                    // C_phi = fmax(0.15,fmin(0.3,C_phi/sigma_forth));
-                    // C_psi = fmax(0.15,fmin(0.3,C_psi/sigma_back));
-
-                    d3 = pow(1.05,(iter+1)/100);
                     calculate_c_transform_constant(C_c_transform, phi_, mu);
                     set_coeff(phi_c1_, phi_c2_, C_phi_, mu_max, d1, d2, d3, false, C_c_transform);
                     calculate_c_transform_constant(C_c_transform, psi_, helper_f.DUstar_);
@@ -751,8 +738,9 @@ int main(int argc, char** argv){
 
     // Initialize mu
     double* mu=new double[n1*n2];
-    // create_mu_square(mu,0.2,0.2,0.1,n1,n2);
-    create_mu_from_image(mu,n1,n2);
+    create_mu_square(mu,0.2,0.2,0.1,n1,n2);
+    // create_mu_from_image(mu,n1,n2);
+    // create_mu_from_image2(mu,n1,n2);
 
     cout << "XXX Starting Gradient Flow XXX" << "\n";
 
@@ -770,12 +758,13 @@ int main(int argc, char** argv){
 
     Helper_U helper_f(n1,n2,gamma,tau,m,mu);
 
-    double a = 1;
-    init_entropy_sine(helper_f.V_, 5, 3, a, n1, n2);
+    double a = 10;
+    // init_entropy_sine(helper_f.V_, 5, 3, a, n1, n2);
+    init_entropy_quadratic(helper_f.V_, 0.9, 0.9, a, n1, n2);
 
     cout << "a for entropy sine : " << a << "\n";
 
-    // init_obstacle_from_image(obstacle, n1, n2);
+    init_obstacle_from_image(obstacle, n1, n2);
     // init_obstacle_two_moons(obstacle, n1, n2);
     // init_obstacle_pac_man(obstacle, n1, n2);
     // init_obstacle_circle(obstacle, n1, n2);
@@ -803,7 +792,7 @@ int main(int argc, char** argv){
     double sum = 0;
 
     for(int n=0;n<nt;++n){
-
+        clock_t time_outer = clock();
         bf.start_OT(helper_f, mu, n, init);
         helper_f.calculate_DUstar_normalized(bf.phi_);
         memcpy(mu,helper_f.DUstar_,n1*n2*sizeof(double));
@@ -813,8 +802,10 @@ int main(int argc, char** argv){
 
         filename="./data/mu-"+to_string(n+1)+".csv";
         create_bin_file(mu,n1*n2,filename);
-
+        time_outer=clock()-time_outer;
+        printf ("\nCPU time for outer iteration: %f seconds.\n\n",((float)time_outer)/CLOCKS_PER_SEC);
         if(plot > 0) init.save_image_opencv(mu,figurename,n+1);
+
     }
 
     time=clock()-time;
