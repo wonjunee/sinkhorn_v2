@@ -520,7 +520,7 @@ public:
 
         for(int i=0;i<n1*n2;++i){
             if(mu[i] > 0) push_mu_[i] = 0;
-            else          push_mu_[i] = -1000;
+            else          push_mu_[i] = -1.0/tau_*100;
         }
 
         flt2d_->find_c_concave(push_mu_, push_mu_, tau_);
