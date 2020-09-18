@@ -794,8 +794,8 @@ int main(int argc, char** argv){
 
     string figurename = "barenblatt";
 
-    // if(plot > 0) init.save_image_opencv(mu,obstacle,figurename,0);
-    if(plot > 0) init.save_image_opencv(mu,figurename,0);
+    if(plot > 0) init.save_image_opencv(mu,obstacle,figurename,0);
+    // if(plot > 0) init.save_image_opencv(mu,figurename,0);
 
     clock_t time;
     time=clock();
@@ -815,7 +815,8 @@ int main(int argc, char** argv){
         create_bin_file(mu,n1*n2,filename);
         time_outer=clock()-time_outer;
         printf ("\nCPU time for outer iteration: %f seconds.\n\n",((float)time_outer)/CLOCKS_PER_SEC);
-        if(plot > 0) init.save_image_opencv(mu,figurename,n+1);
+        if(plot > 0) init.save_image_opencv(mu,obstacle,figurename,n+1);
+        // if(plot > 0) init.save_image_opencv(mu,figurename,n+1);
 
     }
 
