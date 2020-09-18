@@ -465,7 +465,7 @@ public:
             }
         }
 
-        return fmax(0.1, phimax * 0.2);
+        return fmax(0.1, phimax * 0.05);
     }
 
     /**
@@ -520,28 +520,37 @@ public:
 
         for(int i=0;i<n1*n2;++i){
             if(mu[i] > 0) push_mu_[i] = 0;
-            else          push_mu_[i] = -FLT_MAX;
+            else          push_mu_[i] = -1000;
         }
 
         flt2d_->find_c_concave(push_mu_, push_mu_, tau_);
 
-        for(int i=0;i<n2;++i){
-            for(int j=0;j<n1;++j){
+        for(int i=0;i<n1*n2;++i){
+            // if(mu[i] > 0) phi_[i] = - gamma_ * pow(mu[i],m_-1) - helper_f.V_[i];
+            // else          phi_[i] = push_mu_[i] - helper_f.V_[i];
 
-                phi_[i*n1+j] = push_mu_[i*n1+j] - helper_f.V_[i*n1+j];
-
-                /*
-                if(outer_iter == 0){
-                    phi_[i*n1+j] = push_mu_[i*n1+j] - helper_f.V_[i*n1+j];    
-                }else{
-                    if(mu[i*n1+j] <= 0) phi_[i*n1+j] = push_mu_[i*n1+j] - helper_f.V_[i*n1+j];    
-                }
-                */
-            }
+            phi_[i] = - gamma_ * pow(mu[i],m_-1) + push_mu_[i] - helper_f.V_[i];
         }
 
-        // fftps_->solve_heat_equation(phi_,0.005);
+        // fftps_->solve_heat_equation(phi_,0.001);
         
+
+        // for(int i=0;i<n2;++i){
+        //     for(int j=0;j<n1;++j){
+
+        //         if(mu[i*n1+j] <= 0) phi_[i*n1+j] = push_mu_[i*n1+j];
+
+        //         // phi_[i*n1+j] = push_mu_[i*n1+j] - helper_f.V_[i*n1+j];
+
+                
+        //         if(outer_iter == 0){
+        //             phi_[i*n1+j] = push_mu_[i*n1+j] - helper_f.V_[i*n1+j];    
+        //         }else{
+        //             if(mu[i*n1+j] <= 0) phi_[i*n1+j] = push_mu_[i*n1+j] - helper_f.V_[i*n1+j];    
+        //         }
+                
+        //     }
+        // }
     }
 
     void calculate_d1_d2_d3(double& d1, double& d2, double& d3, const double lambda, const double infgradphi, const double* nu){
@@ -557,8 +566,6 @@ public:
 
         calculate_gradient_vxx_vyy_vxy(vxx_, vyy_, vxy_, phi);
 
-        double mu_max = 0; for(int i=0;i<n1*n2;++i) mu_max = fmax(mu_max, mu[i]);
-
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
 
@@ -569,8 +576,6 @@ public:
                 double y = (i+0.5)/n2 - tau_ * vyval;
 
                 double mu_val = interpolate_function(x,y,mu);
-
-                // double mu_val = 1;
 
                 if(mu_val > 0){
                     /* calculate eigen values */
@@ -587,7 +592,7 @@ public:
             }
         }
 
-        // C *= mu_max;
+        // double mu_max = 0; for(int i=0;i<n1*n2;++i) mu_max = fmax(mu_max, mu[i]); C *= mu_max;
     }
 
     void start_OT(Helper_U& helper_f, const double* mu, const int outer_iter, Initializer& init){
@@ -632,6 +637,11 @@ public:
         double C_c_transform = 1;
 
         initialize_phi(helper_f,mu,outer_iter); // intiailize phi in the first outer iteration
+
+        {
+            string figurename = "output-phi";
+            init.save_image_opencv(phi_, figurename,outer_iter, -1);
+        }
         
         /*
             Starting the loop
@@ -643,7 +653,7 @@ public:
                 Calculating the relative error
             */
 
-            if(iter % 50 == 0 && iter >= 0){
+            if(iter % 10 == 0 && iter >= 0){
                 if(m_ == 2){
                     calculate_c_transform_constant(C_c_transform, phi_, mu);
                     set_coeff_m_2(phi_c1_, phi_c2_, mu_max, C_c_transform);
@@ -656,7 +666,7 @@ public:
 
                     calculate_c_transform_constant(C_c_transform, phi_, mu);
                     set_coeff(phi_c1_, phi_c2_, C_phi_, mu_max, d1, d2, d3, false, C_c_transform);
-                    calculate_c_transform_constant(C_c_transform, psi_, helper_f.DUstar_);
+                    // calculate_c_transform_constant(C_c_transform, psi_, helper_f.DUstar_);
                     set_coeff(psi_c1_, psi_c2_, C_psi_, mu_max, d1, d2, d3, false, C_c_transform);    
                 }
             }

@@ -39,27 +39,13 @@ public:
         lower = new vector2d[n1];
     }
 
-    ~FLT(){
+    virtual ~FLT(){
         delete[] points_x;
         delete[] points_y;
         delete[] convex_hull_vertices_x;
         delete[] convex_hull_vertices_y;
         delete[] lower;
     }
-
-    void initialize(int n1){
-        this->n1=n1;
-
-        points_x=new double[n1];
-        points_y=new double[n1];
-        convex_hull_vertices_x=new double[n1];
-        convex_hull_vertices_y=new double[n1];
-        lower = new vector2d[n1];
-    }
-
-    // virtual ~FLT(){
-    //     destroy_all();
-    // }
 
     void setup_points(double* y_array){
         for(int i=0;i<n1;++i){
@@ -167,22 +153,7 @@ public:
         PHI=new double[n1*n2];
     }
 
-    void initialize(int n1, int n2){
-        this->n1=n1;
-        this->n2=n2;
-
-        flt1 = new FLT(n1);
-        flt2 = new FLT(n2);
-
-        y_array=new double[n1];
-        v_s=new double[n1*n2];
-
-        ustartmp=new double[n1*n2];
-
-        PHI=new double[n1*n2];
-    }
-
-    ~FLT2D(){
+    virtual ~FLT2D(){
         delete[] y_array;
         delete[] v_s;
         delete[] ustartmp;

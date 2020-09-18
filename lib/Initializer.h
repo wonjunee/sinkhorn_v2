@@ -35,12 +35,16 @@ public:
         string filename_iter = "./figures/" + filename;
         filename_iter = filename_iter + "-" + to_string(iter) + ".png";
 
+        double min_A = A[0];
         if(max_A < 0){
             max_A = A[0];
-            for(int i=1;i<n1*n2;++i) max_A = fmax(max_A, A[i]);    
+            for(int i=1;i<n1*n2;++i){
+                max_A = fmax(max_A, A[i]);
+                min_A = fmin(min_A, A[i]);
+            }
         }
         
-        for(int i=0;i<n1*n2;++i) ar[i] = (unsigned char) (A[i]/max_A * 255);
+        for(int i=0;i<n1*n2;++i) ar[i] = (unsigned char) ((A[i]-min_A)/(max_A-min_A) * 255);
 
         memcpy(img_in.data, ar, n1*n2*sizeof(unsigned char));
 
