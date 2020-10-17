@@ -62,7 +62,7 @@ public:
     poisson_solver* fftps_;
     FLT2D*          flt2d_;
 
-    BackAndForth(int n1, int n2, int max_iteration, double tolerance, double gamma, double tau, double m){
+    BackAndForth(int n1, int n2, int max_iteration, double tolerance, double gamma, double tau, double m, double C){
 
         this->n1=n1;
         this->n2=n2;
@@ -81,9 +81,13 @@ public:
         phi_=new double[n1*n2];
         psi_=new double[n1*n2];
 
-        push_mu_=new double[n1*n2];
+        push_mu_= new double[n1*n2];
 
-        flt2d_         = new FLT2D(n1,n2);
+        flt2d_  = new FLT2D(n1,n2);
+
+        // set a constant for the trace theorem
+        C_phi_ = C;
+        C_psi_ = C;
 
         clock_t time;
         time=clock();
@@ -334,6 +338,12 @@ public:
         }else if(W2_value_previous-W2_value<-beta_2_*error){
             return alpha_1_;
         }
+
+        if(W2_value - W2_value_previous < beta_1_*error){
+            return alpha_2_;
+        }else if(W2_value - W2_value_previous > beta_2_*error){
+            return alpha_1_;
+        }
         return 1;
     }
 
@@ -359,7 +369,7 @@ public:
 
     double perform_OT_iteration_back_det(Helper_U& helper_f,double& sigma,double& W2_value,const double* mu, const int iter){
         // ------------------------------------------------------------
-        // double W2_value_previous = 0;
+        double W2_value_previous = 0;
         double error_nu = 0;
 
         flt2d_->find_c_concave(psi_,phi_,tau_);
@@ -381,8 +391,8 @@ public:
 
         fftps_->perform_inverse_laplacian(push_mu_, mu, psi_c1_, psi_c2_, sigma);
 
-        // W2_value_previous=calculate_dual_value(helper_f,phi,psi,mu);
-        // error_nu=calculate_h_minus_1(fftps,push_mu,mu);
+        W2_value_previous=calculate_dual_value(helper_f,phi_,psi_,mu);
+        double error_nu_h=calculate_h_minus_1(push_mu_,mu);
 
         error_nu=calculate_L1_error(push_mu_,mu);
 
@@ -394,7 +404,7 @@ public:
 
         W2_value=calculate_dual_value(helper_f,phi_,psi_,mu);
 
-        // sigma = update_sigma(sigma, W2_value, W2_value_previous, error_nu);
+        sigma = update_sigma(sigma, W2_value, W2_value_previous, error_nu_h);
 
         return error_nu;
     }
@@ -402,7 +412,7 @@ public:
 
     double perform_OT_iteration_forth_det(Helper_U& helper_f,double& sigma,double& W2_value,const double* mu, const int iter){
         // ------------------------------------------------------------
-        // double W2_value_previous = 0;
+        double W2_value_previous = 0;
         double error_mu = 0;
 
         flt2d_->find_c_concave(phi_,psi_,tau_);
@@ -413,7 +423,7 @@ public:
         calculate_gradient_vxx_vyy_vxy(vxx_, vyy_, vxy_, psi_);
 
         // pushforward mu -> push_mu_
-        calculate_push_pull_rho(push_mu_, mu, vxx_, vyy_, vxy_, phi_, 0.5);
+        calculate_push_pull_rho(push_mu_, mu, vxx_, vyy_, vxy_, phi_, 0.2);
 
 
         // calculate_gradient_vxx_vyy_vxy(vxx_, vyy_, vxy_, psi_);
@@ -427,8 +437,9 @@ public:
         fftps_->perform_inverse_laplacian(push_mu_, helper_f.DUstar_, phi_c1_, phi_c2_, sigma);
 
 
-        // W2_value_previous=calculate_dual_value(helper_f,phi,psi,mu);
-        // error_mu=calculate_h_minus_1(fftps,push_mu,helper_f.DUstar_);
+        W2_value_previous=calculate_dual_value(helper_f,phi_,psi_,mu);
+        double error_mu_h=calculate_h_minus_1(push_mu_,helper_f.DUstar_);
+
         error_mu=calculate_L1_error(push_mu_, helper_f.DUstar_);
 
         for(int i=0;i<n1*n2;++i){
@@ -440,7 +451,7 @@ public:
 
         W2_value=calculate_dual_value(helper_f,phi_,psi_,mu);
 
-        // sigma = update_sigma(sigma, W2_value, W2_value_previous, error_mu);
+        sigma = update_sigma(sigma, W2_value, W2_value_previous, error_mu_h);
 
         return error_mu;
     }
@@ -457,6 +468,7 @@ public:
         Calculate a = 0.1 * max(-phi)
     */
     double calculate_lambda(Helper_U& helper_f) const{
+
         double phimax = 1;
         
         for(int i=0;i<n1*n2;++i){
@@ -465,7 +477,8 @@ public:
             }
         }
 
-        return fmax(0.1, phimax * 0.05);
+        return fmin(0.1, phimax * 0.1);
+        // return fmax(0.1, phimax * 0.05);
     }
 
     /**
@@ -495,7 +508,7 @@ public:
             }
         }
 
-        return fmax(0.1,sqrt(infgradphi));
+        return fmax(5.0,sqrt(infgradphi));
     }
 
     void set_coeff_m_2(double& c1, double& c2, const double mu_max, const double C_c_transform){
@@ -510,14 +523,6 @@ public:
 
     void initialize_phi(Helper_U& helper_f,const double* mu, const int outer_iter){
 
-        // for(int i=0;i<n1*n2;++i){
-        //     if(helper_f.obstacle_[i] == 0){
-        //         phi_[i] = - (gamma_ * pow(mu[i],m_-1) + helper_f.V_[i]);
-        //     } else {
-        //         phi_[i] = 0;
-        //     }
-        // }
-
         for(int i=0;i<n1*n2;++i){
             if(mu[i] > 0) push_mu_[i] = 0;
             else          push_mu_[i] = -1.0/tau_*100;
@@ -526,35 +531,12 @@ public:
         flt2d_->find_c_concave(push_mu_, push_mu_, tau_);
 
         for(int i=0;i<n1*n2;++i){
-            // if(mu[i] > 0) phi_[i] = - gamma_ * pow(mu[i],m_-1) - helper_f.V_[i];
-            // else          phi_[i] = push_mu_[i] - helper_f.V_[i];
-
-            phi_[i] = - gamma_ * pow(mu[i],m_-1) + push_mu_[i] - helper_f.V_[i];
+            phi_[i] = - gamma_ * mprime_ * pow(mu[i],m_-1) + push_mu_[i] - helper_f.V_[i];
         }
-
-        // fftps_->solve_heat_equation(phi_,0.001);
-        
-
-        // for(int i=0;i<n2;++i){
-        //     for(int j=0;j<n1;++j){
-
-        //         if(mu[i*n1+j] <= 0) phi_[i*n1+j] = push_mu_[i*n1+j];
-
-        //         // phi_[i*n1+j] = push_mu_[i*n1+j] - helper_f.V_[i*n1+j];
-
-                
-        //         if(outer_iter == 0){
-        //             phi_[i*n1+j] = push_mu_[i*n1+j] - helper_f.V_[i*n1+j];    
-        //         }else{
-        //             if(mu[i*n1+j] <= 0) phi_[i*n1+j] = push_mu_[i*n1+j] - helper_f.V_[i*n1+j];    
-        //         }
-                
-        //     }
-        // }
     }
 
     void calculate_d1_d2_d3(double& d1, double& d2, double& d3, const double lambda, const double infgradphi, const double* nu){
-        double eval = 1.0 / pow(gamma_, mprime_ - 1);
+        double eval = pow(gamma_ * mprime_, 1 - mprime_);
 
         d1 = eval * pow(lambda, mprime_-1) / infgradphi;
         d2 = eval * pow(lambda, mprime_-2) * (mprime_ - 1);
@@ -609,8 +591,8 @@ public:
 
         beta_1_ =0.1;
         beta_2_ =0.9;
-        alpha_1_=1.1;
-        alpha_2_=0.9;
+        alpha_1_=1.05;
+        alpha_2_=0.95;
 
         /*
             Initialize the tolerance based on tau^2
@@ -653,7 +635,7 @@ public:
                 Calculating the relative error
             */
 
-            if(iter % 10 == 0 && iter >= 0){
+            if(iter % 50 == 0 && iter >= 0){
                 if(m_ == 2){
                     calculate_c_transform_constant(C_c_transform, phi_, mu);
                     set_coeff_m_2(phi_c1_, phi_c2_, mu_max, C_c_transform);
@@ -747,11 +729,15 @@ int main(int argc, char** argv){
 
     create_csv_parameters(n1,n2,nt,tau,gamma,m);
 
-    // Initialize mu
+    // Initialize mu and obstacle
     double* mu=new double[n1*n2];
+    unsigned char* obstacle = new unsigned char[n1*n2];
+
     create_mu_square(mu,0.2,0.2,0.1,n1,n2);
     // create_mu_from_image(mu,n1,n2);
     // create_mu_from_image2(mu,n1,n2);
+
+    for(int i=0;i<n1*n2;++i) mu[i] *= 0.1;
 
     cout << "XXX Starting Gradient Flow XXX" << "\n";
 
@@ -763,31 +749,26 @@ int main(int argc, char** argv){
     printf("%s", ctime(&my_time));
     cout << "\n";
 
-    unsigned char* obstacle = new unsigned char[n1*n2];
+    
 
     string data_folder = "data";
 
     Helper_U helper_f(n1,n2,gamma,tau,m,mu);
 
-    double a = 10;
+    double a = 5;
     // init_entropy_sine(helper_f.V_, 5, 3, a, n1, n2);
-    init_entropy_quadratic(helper_f.V_, 0.9, 0.9, a, n1, n2);
+    init_entropy_quadratic(helper_f.V_, 0.5, 0.5, a, n1, n2);
 
-    cout << "a for entropy sine : " << a << "\n";
-
-    init_obstacle_from_image(obstacle, n1, n2);
+    // init_obstacle_from_image(obstacle, n1, n2);
     // init_obstacle_two_moons(obstacle, n1, n2);
     // init_obstacle_pac_man(obstacle, n1, n2);
-    // init_obstacle_circle(obstacle, n1, n2);
+    init_obstacle_circle(obstacle, n1, n2);
 
     helper_f.set_obstacle(obstacle);
 
     cout << setprecision(6);
 
-    BackAndForth bf(n1,n2,max_iteration,tolerance,gamma,tau,m);
-
-    bf.C_phi_ = C;
-    bf.C_psi_ = C;
+    BackAndForth bf(n1,n2,max_iteration,tolerance,gamma,tau,m,C);
 
     string filename="./data/mu-"+to_string(0)+".csv";
     create_bin_file(mu,n1*n2,filename);

@@ -20,9 +20,9 @@ public:
     double* DUstar_;
 
     Helper_U(){
-        V_=NULL;
-        DUstar_=NULL;
-        obstacle_ = NULL;
+        V_        =NULL;
+        DUstar_   =NULL;
+        obstacle_ =NULL;
     }
 
     Helper_U(int n1,int n2,double gamma,double tau,double m,const double* mu){
@@ -37,6 +37,8 @@ public:
         V_      =new double[n1*n2];
 
         set_M_(mu);
+
+        cout << "M_ : " << M_ << "\n";
     }
 
     ~Helper_U(){
@@ -100,7 +102,7 @@ public:
         return sum /(1.0*n1_*n2_)- M_;
     }
 
-    void calculate_DUstar_normalized(double* phi, const double tolerance=1e-7){
+    void calculate_DUstar_normalized(double* phi, const double tolerance=1e-6){
         
         int max_iteration=100;
         bool do_bisection = true;
