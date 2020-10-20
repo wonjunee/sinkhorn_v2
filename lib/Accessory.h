@@ -484,18 +484,50 @@ void init_entropy_image_obstacle(double* nu, double gamma, double r, double a, i
 
 
 /* create a circle obstacle */
-void init_obstacle_circle(unsigned char* obstacle, int n1, int n2){
+void init_obstacle_circle(unsigned char* obstacle, double px, double py, double r, int n1, int n2){
 
-    double px = 0.5;
-    double py = 0.5;
-    double r  = 0.2;
+    // double px = 0.5;
+    // double py = 0.5;
+    // double r  = 0.2;
 
     for(int i=0;i<n2;++i){
         for(int j=0;j<n1;++j){
             double x = (j+.5)/n1;
             double y = (i+.5)/n2;
 
-            if((x-px)*(x-px) + (y-px)*(y-px) < r*r) obstacle[i*n1+j] = 100;
+            if((x-px)*(x-px) + (y-py)*(y-py) < r*r) obstacle[i*n1+j] = 100;
+            else obstacle[i*n1+j] = 0;
+        }
+    }
+}
+
+
+/* create a circle obstacle */
+void init_obstacle_two_circle(unsigned char* obstacle, double px, double py, double r, double px2, double py2, double r2, int n1, int n2){
+    for(int i=0;i<n2;++i){
+        for(int j=0;j<n1;++j){
+            double x = (j+.5)/n1;
+            double y = (i+.5)/n2;
+
+            if((x-px)*(x-px) + (y-py)*(y-py) < r*r) obstacle[i*n1+j] = 100;
+            else if((x-px2)*(x-px2) + (y-py2)*(y-py2) < r2*r2) obstacle[i*n1+j] = 100;
+            else obstacle[i*n1+j] = 0;
+        }
+    }
+}
+
+
+/* create a circle obstacle */
+void init_obstacle_four_circle(unsigned char* obstacle, double px, double py, double r, double px2, double py2, double r2, double px3, double py3, double r3, double px4, double py4, double r4, int n1, int n2){
+    for(int i=0;i<n2;++i){
+        for(int j=0;j<n1;++j){
+            double x = (j+.5)/n1;
+            double y = (i+.5)/n2;
+
+            if((x-px)*(x-px) + (y-py)*(y-py) < r*r) obstacle[i*n1+j] = 100;
+            else if((x-px2)*(x-px2) + (y-py2)*(y-py2) < r2*r2) obstacle[i*n1+j] = 100;
+            else if((x-px3)*(x-px3) + (y-py3)*(y-py3) < r3*r3) obstacle[i*n1+j] = 100;
+            else if((x-px4)*(x-px4) + (y-py4)*(y-py4) < r4*r4) obstacle[i*n1+j] = 100;
             else obstacle[i*n1+j] = 0;
         }
     }

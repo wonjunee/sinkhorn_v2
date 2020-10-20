@@ -33,8 +33,9 @@ public:
         m_     = m;
         mprime_= m_/(m_-1);
 
-        DUstar_ =new double[n1*n2];
-        V_      =new double[n1*n2];
+        DUstar_  =new double[n1*n2];
+        V_       =new double[n1*n2];
+        obstacle_=new unsigned char[n1*n2];
 
         set_M_(mu);
 

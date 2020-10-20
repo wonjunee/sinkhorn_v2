@@ -27,7 +27,10 @@ public:
     double tolerance_;
     double W2_value_;
 
-    double C; // Coefficients for trance theorem
+    double C; // Coefficients for trace theorem
+
+    double C_tr1_;
+    double C_tr2_;
 
     double phi_c1_;
     double phi_c2_;
@@ -59,6 +62,8 @@ public:
 
     double* push_mu_;
 
+    double* R_arr_;
+
     poisson_solver* fftps_;
     FLT2D*          flt2d_;
 
@@ -83,6 +88,8 @@ public:
 
         push_mu_= new double[n1*n2];
 
+        R_arr_ = new double[n1*n2/2];
+
         flt2d_  = new FLT2D(n1,n2);
 
         // set a constant for the trace theorem
@@ -103,6 +110,7 @@ public:
         delete[] phi_;
         delete[] psi_;
         delete[] push_mu_;
+        delete[] R_arr_;
 
         delete flt2d_;
         delete fftps_;
@@ -469,15 +477,14 @@ public:
     */
     double calculate_lambda(Helper_U& helper_f) const{
 
-        double phimax = 1;
+        double phimax = 1e-5;
         
         for(int i=0;i<n1*n2;++i){
             if(helper_f.obstacle_[i] == 0){
                 phimax = fmax(phimax,-phi_[i]-helper_f.V_[i]);
             }
         }
-
-        return fmin(0.1, phimax * 0.1);
+        return phimax * 0.01;
         // return fmax(0.1, phimax * 0.05);
     }
 
@@ -488,12 +495,12 @@ public:
 
         double infgradphi= 10000;
         int count = 0;
-        for(int i=1;i<n2-1;++i){
-            for(int j=1;j<n1-1;++j){
+        for(int i=0;i<n2-1;++i){
+            for(int j=0;j<n1-1;++j){
                 if(obstacle[i*n1+j] == 0 && obstacle[i*n1+j+1] == 0 && obstacle[(i+1)*n1+j] == 0  && obstacle[i*n1+j-1] == 0 && obstacle[(i-1)*n1+j] == 0){
                     if(-phi_[i*n1+j]-V[i*n1+j] > 0 && -phi_[i*n1+j]-V[i*n1+j] < lambda){
-                        double gradxphi = 0.5*n1*(phi_[i*n1+j+1]-phi_[i*n1+j-1]-V[i*n1+j+1]+V[i*n1+j-1]);
-                        double gradyphi = 0.5*n2*(phi_[(i+1)*n1+j]-phi_[(i-1)*n1+j]-V[(i+1)*n1+j]+V[(i-1)*n1+j]);
+                        double gradxphi = n1*(-phi_[i*n1+(j+1)]+phi_[i*n1+j]-V[i*n1+(j+1)]+V[i*n1+j]);
+                        double gradyphi = n2*(-phi_[(i+1)*n1+j]+phi_[i*n1+j]-V[(i+1)*n1+j]+V[i*n1+j]);
                         double eval = gradxphi*gradxphi + gradyphi*gradyphi;
 
                         if(count == 0) {
@@ -508,7 +515,7 @@ public:
             }
         }
 
-        return fmax(5.0,sqrt(infgradphi));
+        return fmax(1,sqrt(infgradphi));
     }
 
     void set_coeff_m_2(double& c1, double& c2, const double mu_max, const double C_c_transform){
@@ -517,22 +524,24 @@ public:
     }
 
     void set_coeff(double& c1, double& c2, const double C, const double mu_max, const double d1, const double d2, const double d3, const bool verbose, const double C_c_transform){
-        c1 = C * d1 + d2;
-        c2 = C * d1 + C_c_transform * tau_;
+        c1 = C_tr1_ * d1 + d2;
+        c2 = C_tr2_ * d1 + C_c_transform * tau_;
     }
 
     void initialize_phi(Helper_U& helper_f,const double* mu, const int outer_iter){
 
-        for(int i=0;i<n1*n2;++i){
-            if(mu[i] > 0) push_mu_[i] = 0;
-            else          push_mu_[i] = -1.0/tau_*100;
-        }
+        // for(int i=0;i<n1*n2;++i){
+        //     if(mu[i] > 0) push_mu_[i] = 0;
+        //     else          push_mu_[i] = -1.0/tau_*100;
+        // }
 
-        flt2d_->find_c_concave(push_mu_, push_mu_, tau_);
+        // flt2d_->find_c_concave(push_mu_, push_mu_, tau_);
 
-        for(int i=0;i<n1*n2;++i){
-            phi_[i] = - gamma_ * mprime_ * pow(mu[i],m_-1) + push_mu_[i] - helper_f.V_[i];
-        }
+        // for(int i=0;i<n1*n2;++i){
+        //     phi_[i] = - gamma_ * mprime_ * pow(mu[i],m_-1) + push_mu_[i] - helper_f.V_[i];
+        // }
+
+        for(int i=0;i<n1*n2;++i) phi_[i] = - gamma_ * mprime_ * pow(mu[i],m_-1) - helper_f.V_[i];
     }
 
     void calculate_d1_d2_d3(double& d1, double& d2, double& d3, const double lambda, const double infgradphi, const double* nu){
@@ -548,8 +557,8 @@ public:
 
         calculate_gradient_vxx_vyy_vxy(vxx_, vyy_, vxy_, phi);
 
-        for(int i=0;i<n2;++i){
-            for(int j=0;j<n1;++j){
+        for(int i=1;i<n2-1;++i){
+            for(int j=1;j<n1-1;++j){
 
                 double vxval=0.5*n1*(phi[i*n1+(int)fmin(n1-1,j+1)]-phi[i*n1+(int)fmax(0,j-1)]);
                 double vyval=0.5*n2*(phi[(int)fmin(n2-1,i+1)*n1+j]-phi[(int)fmax(0,i-1)*n1+j]);
@@ -577,6 +586,125 @@ public:
         // double mu_max = 0; for(int i=0;i<n1*n2;++i) mu_max = fmax(mu_max, mu[i]); C *= mu_max;
     }
 
+    void calculate_trace_theorem_constant_matt(Helper_U& helper_f, double lambda, int iter, Initializer& init){
+        {
+            for(int i=0;i<n1*n2;++i){
+                if(- phi_[i] - helper_f.V_[i] < lambda && - phi_[i] - helper_f.V_[i] > 0) push_mu_[i] = 0;
+                else                                    push_mu_[i] = -1000;
+            }
+
+            flt2d_->find_c_concave(push_mu_, push_mu_, 0.5);
+
+            for(int i=0;i<n1*n2;++i){
+                if(- phi_[i] - helper_f.V_[i] > lambda) push_mu_[i] =  0;
+                else                                    push_mu_[i] = -sqrt(push_mu_[i]);
+            }
+
+            memset(R_arr_, 0, n1*n2/2*sizeof(double));
+
+            // calculate the laplacian
+            for(int i=0;i<n2;++i){
+                for(int j=0;j<n1;++j){
+                    if(push_mu_[i*n1+j] < - 2.0/n1){
+                        double laplacian = n1*n1*(push_mu_[i*n1+(int)fmin(n1-1,j+1)]-2.0*push_mu_[i*n1+j]+push_mu_[i*n1+(int)fmax(0,j-1)])
+                                          +n2*n2*(push_mu_[(int)fmin(n2-1,i+1)*n1+j]-2.0*push_mu_[i*n1+j]+push_mu_[(int)fmax(0,i-1)*n1+j]);
+                        int ind = - push_mu_[i*n1+j]*n1;
+                        if(ind >= 0 && ind < n1*n2/2){
+                            R_arr_[ind] = fmax(R_arr_[ind], fmax(0,laplacian));
+                        }
+                    }
+                }
+            }
+
+            
+            for(int ri=2;ri<n1*n2/2;++ri) R_arr_[ri] = fmax(R_arr_[ri], R_arr_[ri-1]);
+
+            int starting_index = 10;
+            double R = R_arr_[starting_index] + 1.0*n1/starting_index;
+            for(int ri=starting_index;ri<n1*n2/2;++ri){
+                R = fmin(R, R_arr_[ri] + 1.0*n1/ri);
+            }
+
+            printf("R : %f\t", R);
+
+            double C = fmax(R, 1);
+            double eps = 100;
+            C_tr1_ = C / eps + C;
+            C_tr2_ = eps / C;
+
+            // C_tr1_ = 1 + R;
+            // C_tr2_ = 1;
+
+        }
+
+        {
+            for(int i=0;i<n1*n2;++i){
+                if(- phi_[i] - helper_f.V_[i] < lambda && - phi_[i] - helper_f.V_[i] > 0) push_mu_[i] = 0;
+                else                                    push_mu_[i] = -1000;
+            }
+
+            flt2d_->find_c_concave(push_mu_, push_mu_, 0.5);
+
+            for(int i=0;i<n1*n2;++i){
+                if(- phi_[i] - helper_f.V_[i] > lambda) push_mu_[i] = -sqrt(push_mu_[i]);
+                else                                    push_mu_[i] =  0;
+            }
+
+            memset(R_arr_, 0, n1*n2/2*sizeof(double));
+
+            // calculate the laplacian
+            for(int i=0;i<n2;++i){
+                for(int j=0;j<n1;++j){
+                    if(push_mu_[i*n1+j] < - 2.0/n1){
+                        double laplacian = n1*n1*(push_mu_[i*n1+(int)fmin(n1-1,j+1)]-2.0*push_mu_[i*n1+j]+push_mu_[i*n1+(int)fmax(0,j-1)])
+                                          +n2*n2*(push_mu_[(int)fmin(n2-1,i+1)*n1+j]-2.0*push_mu_[i*n1+j]+push_mu_[(int)fmax(0,i-1)*n1+j]);
+                        int ind = - push_mu_[i*n1+j]*n1;
+                        if(ind >= 0 && ind < n1*n2/2){
+                            R_arr_[ind] = fmax(R_arr_[ind], fmax(0,laplacian));
+                        }
+                    }
+                }
+            }
+
+            
+            for(int ri=2;ri<n1*n2/2;++ri) R_arr_[ri] = fmax(R_arr_[ri], R_arr_[ri-1]);
+
+            int starting_index = 10;
+            double R = R_arr_[starting_index] + 1.0*n1/starting_index;
+            for(int ri=starting_index;ri<n1*n2/2;++ri){
+                R = fmin(R, R_arr_[ri] + 1.0*n1/ri);
+            }
+
+            printf("R : %f\n", R);
+
+            double C = fmax(R, 1);
+            double eps = 100;
+            
+            if(2.0 * C < C_tr1_){
+                C_tr1_ = C / eps + C;
+                C_tr2_ = eps / C;
+            }
+            
+
+        }
+        
+
+        string figurename = "output-trace";
+        init.save_image_opencv(push_mu_, figurename, iter, -1);
+    }
+
+    void calculate_trace_theorem_constant_flavien(){
+        double K_gamma = 0.01;
+
+        C_tr1_ = 12 * K_gamma;
+        C_tr2_ = 6 * K_gamma;
+    }
+
+    void calculate_trace_theorem_constant(Helper_U& helper_f, double lambda, int iter, Initializer& init){
+        // calculate_trace_theorem_constant_flavien();
+        calculate_trace_theorem_constant_matt(helper_f,lambda, iter, init);
+    }
+
     void start_OT(Helper_U& helper_f, const double* mu, const int outer_iter, Initializer& init){
 
         const int skip = 50; // frequency of printout
@@ -595,7 +723,7 @@ public:
         alpha_2_=0.95;
 
         /*
-            Initialize the tolerance based on tau^2
+            Calculate sup(mu)
         */
 
         double mu_max = 1;
@@ -604,7 +732,7 @@ public:
         cout << "Iter : " << outer_iter + 1 << " Tolerance : " << tolerance_ << "\n";
 
         /*
-            Initialize the coefficients for fftps
+            Initialize the constants
         */
 
         double lambda = 1;
@@ -618,12 +746,18 @@ public:
 
         double C_c_transform = 1;
 
-        initialize_phi(helper_f,mu,outer_iter); // intiailize phi in the first outer iteration
+        initialize_phi(helper_f,mu,outer_iter);
 
         {
             string figurename = "output-phi";
             init.save_image_opencv(phi_, figurename,outer_iter, -1);
         }
+
+        /*
+            Set the constants for the trace theorem
+        */
+
+        // calculate_trace_theorem_constant(helper_f, lambda);
         
         /*
             Starting the loop
@@ -635,7 +769,7 @@ public:
                 Calculating the relative error
             */
 
-            if(iter % 50 == 0 && iter >= 0){
+            if(iter % 10 == 0 && iter >= 0){
                 if(m_ == 2){
                     calculate_c_transform_constant(C_c_transform, phi_, mu);
                     set_coeff_m_2(phi_c1_, phi_c2_, mu_max, C_c_transform);
@@ -646,11 +780,15 @@ public:
                     infgradphi = calculate_infgradphi_on_level_set(lambda,helper_f.V_,helper_f.obstacle_);
                     calculate_d1_d2_d3(d1, d2, d3, lambda, infgradphi, helper_f.V_);
 
+                    calculate_trace_theorem_constant(helper_f, lambda, iter, init);
+
                     calculate_c_transform_constant(C_c_transform, phi_, mu);
                     set_coeff(phi_c1_, phi_c2_, C_phi_, mu_max, d1, d2, d3, false, C_c_transform);
                     // calculate_c_transform_constant(C_c_transform, psi_, helper_f.DUstar_);
                     set_coeff(psi_c1_, psi_c2_, C_psi_, mu_max, d1, d2, d3, false, C_c_transform);    
                 }
+
+
             }
 
             /*
@@ -685,6 +823,12 @@ public:
             if(iter%skip==skip-1){
                 // cout<<"|";
                 display_iteration(iter,W2_value_,error_mu,error_nu,C_phi_,C_psi_,infgradphi);
+
+                printf("\tC_tr1: %f, C_tr2: %f\n", C_tr1_, C_tr2_);
+
+                // for(int i=0;i<100;++i) cout << R_arr_[i] << " ";
+
+                cout << flush;
 
                 string figurename = "output";
                 for(int i=0;i<n1*n2;++i) push_mu_[i] = fabs(push_mu_[i] - mu[i]);
@@ -731,7 +875,6 @@ int main(int argc, char** argv){
 
     // Initialize mu and obstacle
     double* mu=new double[n1*n2];
-    unsigned char* obstacle = new unsigned char[n1*n2];
 
     create_mu_square(mu,0.2,0.2,0.1,n1,n2);
     // create_mu_from_image(mu,n1,n2);
@@ -757,14 +900,14 @@ int main(int argc, char** argv){
 
     double a = 5;
     // init_entropy_sine(helper_f.V_, 5, 3, a, n1, n2);
-    init_entropy_quadratic(helper_f.V_, 0.5, 0.5, a, n1, n2);
+    init_entropy_quadratic(helper_f.V_, 0.5, 0.8, a, n1, n2);
 
     // init_obstacle_from_image(obstacle, n1, n2);
     // init_obstacle_two_moons(obstacle, n1, n2);
     // init_obstacle_pac_man(obstacle, n1, n2);
-    init_obstacle_circle(obstacle, n1, n2);
-
-    helper_f.set_obstacle(obstacle);
+    // init_obstacle_circle(obstacle, 0.5, 0.5, 0.25, n1, n2);
+    // init_obstacle_two_circle(obstacle, 0.5 + 0.2*cos(0), 0.5 + 0.2*sin(0), 0.1, 0.5 - 0.2*cos(0), 0.5 - 0.2*sin(0), 0.1, n1, n2);
+    init_obstacle_four_circle(helper_f.obstacle_, 0.5 + 0.2*cos(0), 0.5 + 0.2*sin(0), 0.1, 0.5 + 0.2*cos(M_PI+0), 0.5 + 0.2*sin(M_PI+0), 0.1, 0.5 + 0.2*cos(0.5*M_PI+0), 0.5 + 0.2*sin(0.5*M_PI+0), 0.1, 0.5 + 0.2*cos(1.5*M_PI+0), 0.5 + 0.2*sin(1.5*M_PI+0), 0.1, n1, n2);
 
     cout << setprecision(6);
 
@@ -775,13 +918,15 @@ int main(int argc, char** argv){
 
     string figurename = "barenblatt";
 
-    if(plot > 0) init.save_image_opencv(mu,obstacle,figurename,0);
+    if(plot > 0) init.save_image_opencv(mu,helper_f.obstacle_,figurename,0);
     // if(plot > 0) init.save_image_opencv(mu,figurename,0);
 
     clock_t time;
     time=clock();
 
     double sum = 0;
+
+    init_entropy_quadratic(helper_f.V_, 0.5 - 0.3*cos(0),  0.5 - 0.3*cos(0), a, n1, n2);
 
     for(int n=0;n<nt;++n){
         clock_t time_outer = clock();
@@ -792,12 +937,17 @@ int main(int argc, char** argv){
         /* print out sum */
         sum=0; for(int i=0;i<n1*n2;++i) sum+=mu[i]; cout << "sum : " << sum/(n1*n2) << "\n";
 
-        filename="./data/mu-"+to_string(n+1)+".csv";
-        create_bin_file(mu,n1*n2,filename);
+        // filename="./data/mu-"+to_string(n+1)+".csv";
+        // create_bin_file(mu,n1*n2,filename);
         time_outer=clock()-time_outer;
         printf ("\nCPU time for outer iteration: %f seconds.\n\n",((float)time_outer)/CLOCKS_PER_SEC);
-        if(plot > 0) init.save_image_opencv(mu,obstacle,figurename,n+1);
+        if(plot > 0) init.save_image_opencv(mu,helper_f.obstacle_,figurename,n+1);
         // if(plot > 0) init.save_image_opencv(mu,figurename,n+1);
+
+        double theta = 2 * tau * (n+1);
+        init_entropy_quadratic(helper_f.V_, 0.5 - 0.3*cos(theta*2),  0.5 - 0.3*cos(theta*2), a, n1, n2);
+
+        init_obstacle_four_circle(helper_f.obstacle_, 0.5 + 0.2*cos(theta*1.12), 0.5 + 0.2*sin(theta*1.12), 0.1, 0.5 + 0.2*cos(M_PI+theta*1.12), 0.5 + 0.2*sin(M_PI+theta*1.12), 0.1, 0.5 + 0.2*cos(0.5*M_PI+theta*1.12), 0.5 + 0.2*sin(0.5*M_PI+theta*1.12), 0.1, 0.5 + 0.2*cos(1.5*M_PI+theta*1.12), 0.5 + 0.2*sin(1.5*M_PI+theta*1.12), 0.1, n1, n2);
 
     }
 
