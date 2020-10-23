@@ -16,7 +16,7 @@
 #include "Helper_U.h"
 using namespace std;
 
-
+const double LARGE_VALUE = 999999;
 
 class BackAndForth{
 public:
@@ -88,7 +88,7 @@ public:
 
         push_mu_= new double[n1*n2];
 
-        R_arr_ = new double[n1*n2/2];
+        R_arr_ = new double[n1];
 
         flt2d_  = new FLT2D(n1,n2);
 
@@ -484,20 +484,21 @@ public:
                 phimax = fmax(phimax,-phi_[i]-helper_f.V_[i]);
             }
         }
-        return phimax * 0.01;
+        return phimax * 0.1;
         // return fmax(0.1, phimax * 0.05);
     }
 
     /**
         Calculate infgradphi = inf(|nabla phi|)
     */
-    double calculate_infgradphi_on_level_set(const double lambda, const double* V, const unsigned char* obstacle){
+    double calculate_infgradphi_on_level_set(const double lambda, const double* V, const unsigned char* obstacle, const double* mu){
 
         double infgradphi= 10000;
         int count = 0;
+        printf("lambda : %f\t",lambda);
         for(int i=0;i<n2-1;++i){
             for(int j=0;j<n1-1;++j){
-                if(obstacle[i*n1+j] == 0 && obstacle[i*n1+j+1] == 0 && obstacle[(i+1)*n1+j] == 0  && obstacle[i*n1+j-1] == 0 && obstacle[(i-1)*n1+j] == 0){
+                if(obstacle[i*n1+j] == 0 && obstacle[i*n1+j+1] == 0 && obstacle[(i+1)*n1+j] == 0){
                     if(-phi_[i*n1+j]-V[i*n1+j] > 0 && -phi_[i*n1+j]-V[i*n1+j] < lambda){
                         double gradxphi = n1*(-phi_[i*n1+(j+1)]+phi_[i*n1+j]-V[i*n1+(j+1)]+V[i*n1+j]);
                         double gradyphi = n2*(-phi_[(i+1)*n1+j]+phi_[i*n1+j]-V[(i+1)*n1+j]+V[i*n1+j]);
@@ -515,7 +516,7 @@ public:
             }
         }
 
-        return fmax(1,sqrt(infgradphi));
+        return fmax(10,sqrt(infgradphi));
     }
 
     void set_coeff_m_2(double& c1, double& c2, const double mu_max, const double C_c_transform){
@@ -530,18 +531,20 @@ public:
 
     void initialize_phi(Helper_U& helper_f,const double* mu, const int outer_iter){
 
-        // for(int i=0;i<n1*n2;++i){
-        //     if(mu[i] > 0) push_mu_[i] = 0;
-        //     else          push_mu_[i] = -1.0/tau_*100;
-        // }
+        for(int i=0;i<n1*n2;++i){
+            if(mu[i] > 0) push_mu_[i] = 0;
+            else          push_mu_[i] = -LARGE_VALUE;
+        }
 
-        // flt2d_->find_c_concave(push_mu_, push_mu_, tau_);
+        flt2d_->find_c_concave(push_mu_, push_mu_, tau_);
 
-        // for(int i=0;i<n1*n2;++i){
-        //     phi_[i] = - gamma_ * mprime_ * pow(mu[i],m_-1) + push_mu_[i] - helper_f.V_[i];
-        // }
+        for(int i=0;i<n1*n2;++i){
+            phi_[i] = - gamma_ * mprime_ * pow(mu[i],m_-1) + sqrt(push_mu_[i]) - helper_f.V_[i];
+        }
 
-        for(int i=0;i<n1*n2;++i) phi_[i] = - gamma_ * mprime_ * pow(mu[i],m_-1) - helper_f.V_[i];
+        // for(int i=0;i<n1*n2;++i) phi_[i] = - gamma_ * mprime_ * pow(mu[i],m_-1) - helper_f.V_[i];
+
+        // fftps_->solve_heat_equation(phi_,tau_);
     }
 
     void calculate_d1_d2_d3(double& d1, double& d2, double& d3, const double lambda, const double infgradphi, const double* nu){
@@ -567,6 +570,7 @@ public:
                 double y = (i+0.5)/n2 - tau_ * vyval;
 
                 double mu_val = interpolate_function(x,y,mu);
+                // double mu_val = 1;
 
                 if(mu_val > 0){
                     /* calculate eigen values */
@@ -586,111 +590,111 @@ public:
         // double mu_max = 0; for(int i=0;i<n1*n2;++i) mu_max = fmax(mu_max, mu[i]); C *= mu_max;
     }
 
-    void calculate_trace_theorem_constant_matt(Helper_U& helper_f, double lambda, int iter, Initializer& init){
-        {
-            for(int i=0;i<n1*n2;++i){
-                if(- phi_[i] - helper_f.V_[i] < lambda && - phi_[i] - helper_f.V_[i] > 0) push_mu_[i] = 0;
-                else                                    push_mu_[i] = -1000;
-            }
+    void sub_function_calculate_trace_constant_matt(double& C_tr1, double& C_tr2, Helper_U& helper_f, const double* push_mu, const double lambda){
 
-            flt2d_->find_c_concave(push_mu_, push_mu_, 0.5);
+        memset(R_arr_, 0, n1*sizeof(double));
 
-            for(int i=0;i<n1*n2;++i){
-                if(- phi_[i] - helper_f.V_[i] > lambda) push_mu_[i] =  0;
-                else                                    push_mu_[i] = -sqrt(push_mu_[i]);
-            }
-
-            memset(R_arr_, 0, n1*n2/2*sizeof(double));
-
-            // calculate the laplacian
-            for(int i=0;i<n2;++i){
-                for(int j=0;j<n1;++j){
-                    if(push_mu_[i*n1+j] < - 2.0/n1){
-                        double laplacian = n1*n1*(push_mu_[i*n1+(int)fmin(n1-1,j+1)]-2.0*push_mu_[i*n1+j]+push_mu_[i*n1+(int)fmax(0,j-1)])
-                                          +n2*n2*(push_mu_[(int)fmin(n2-1,i+1)*n1+j]-2.0*push_mu_[i*n1+j]+push_mu_[(int)fmax(0,i-1)*n1+j]);
-                        int ind = - push_mu_[i*n1+j]*n1;
-                        if(ind >= 0 && ind < n1*n2/2){
-                            R_arr_[ind] = fmax(R_arr_[ind], fmax(0,laplacian));
-                        }
+        // calculate the laplacian
+        for(int i=1;i<n2-1;++i){
+            for(int j=1;j<n1-1;++j){
+                if(push_mu_[i*n1+j]<0){
+                    double laplacian = n1*n1*(push_mu[i*n1+(j+1)]-2.0*push_mu[i*n1+j]+push_mu[i*n1+(j-1)])
+                                      +n2*n2*(push_mu[(i+1)*n1+j]-2.0*push_mu[i*n1+j]+push_mu[(i-1)*n1+j]);
+                    int ind = - push_mu[i*n1+j]*n1;
+                    if(ind >= 0 && ind < n1){
+                        R_arr_[ind] = fmax(R_arr_[ind], fmax(0,laplacian));
                     }
                 }
             }
-
-            
-            for(int ri=2;ri<n1*n2/2;++ri) R_arr_[ri] = fmax(R_arr_[ri], R_arr_[ri-1]);
-
-            int starting_index = 10;
-            double R = R_arr_[starting_index] + 1.0*n1/starting_index;
-            for(int ri=starting_index;ri<n1*n2/2;++ri){
-                R = fmin(R, R_arr_[ri] + 1.0*n1/ri);
-            }
-
-            printf("R : %f\t", R);
-
-            double C = fmax(R, 1);
-            double eps = 100;
-            C_tr1_ = C / eps + C;
-            C_tr2_ = eps / C;
-
-            // C_tr1_ = 1 + R;
-            // C_tr2_ = 1;
-
-        }
-
-        {
-            for(int i=0;i<n1*n2;++i){
-                if(- phi_[i] - helper_f.V_[i] < lambda && - phi_[i] - helper_f.V_[i] > 0) push_mu_[i] = 0;
-                else                                    push_mu_[i] = -1000;
-            }
-
-            flt2d_->find_c_concave(push_mu_, push_mu_, 0.5);
-
-            for(int i=0;i<n1*n2;++i){
-                if(- phi_[i] - helper_f.V_[i] > lambda) push_mu_[i] = -sqrt(push_mu_[i]);
-                else                                    push_mu_[i] =  0;
-            }
-
-            memset(R_arr_, 0, n1*n2/2*sizeof(double));
-
-            // calculate the laplacian
-            for(int i=0;i<n2;++i){
-                for(int j=0;j<n1;++j){
-                    if(push_mu_[i*n1+j] < - 2.0/n1){
-                        double laplacian = n1*n1*(push_mu_[i*n1+(int)fmin(n1-1,j+1)]-2.0*push_mu_[i*n1+j]+push_mu_[i*n1+(int)fmax(0,j-1)])
-                                          +n2*n2*(push_mu_[(int)fmin(n2-1,i+1)*n1+j]-2.0*push_mu_[i*n1+j]+push_mu_[(int)fmax(0,i-1)*n1+j]);
-                        int ind = - push_mu_[i*n1+j]*n1;
-                        if(ind >= 0 && ind < n1*n2/2){
-                            R_arr_[ind] = fmax(R_arr_[ind], fmax(0,laplacian));
-                        }
-                    }
-                }
-            }
-
-            
-            for(int ri=2;ri<n1*n2/2;++ri) R_arr_[ri] = fmax(R_arr_[ri], R_arr_[ri-1]);
-
-            int starting_index = 10;
-            double R = R_arr_[starting_index] + 1.0*n1/starting_index;
-            for(int ri=starting_index;ri<n1*n2/2;++ri){
-                R = fmin(R, R_arr_[ri] + 1.0*n1/ri);
-            }
-
-            printf("R : %f\n", R);
-
-            double C = fmax(R, 1);
-            double eps = 100;
-            
-            if(2.0 * C < C_tr1_){
-                C_tr1_ = C / eps + C;
-                C_tr2_ = eps / C;
-            }
-            
-
         }
         
+        for(int ri=3;ri<n1;++ri) R_arr_[ri] = fmax(R_arr_[ri], R_arr_[ri-1]);    
 
-        string figurename = "output-trace";
-        init.save_image_opencv(push_mu_, figurename, iter, -1);
+        double max_distance = 0; for(int i=0;i<n1*n2;++i) max_distance = fmax(max_distance, -push_mu_[i]);
+        double R = LARGE_VALUE;
+        for(int ri=2;ri<n1;++ri){
+            if(1.0*ri/n1 > max_distance) break;
+            R = fmin(R, R_arr_[ri] + 0.5*n1/(ri+1));
+        }
+
+        printf("R : %f\t", R);
+
+        double C = fmax(R, 1);
+        double eps = n1;
+        C_tr1 = C / eps + C/2;
+        C_tr2 = eps / C;
+    }
+
+    void calculate_trace_theorem_constant_matt(Helper_U& helper_f, double lambda, int iter, Initializer& init, const double* mu){
+
+        // outside 
+        {
+            for(int i=0;i<n2;++i){
+                for(int j=0;j<n1;++j){
+                    double add = 0;
+                    int indim = fmax(0,i-1);
+                    if(helper_f.obstacle_[indim*n1+j] > 0) {add = 2*LARGE_VALUE;}
+                    double evalim = - phi_[indim*n1+j] - helper_f.V_[indim*n1+j] - add;
+
+                    add = 0;
+                    int indjm = fmax(0,j-1);
+                    if(helper_f.obstacle_[i*n1+indjm] > 0) {add = 2*LARGE_VALUE;}
+                    double evaljm = - phi_[i*n1+indjm] - helper_f.V_[i*n1+indjm] - add;
+
+                    add = 0;
+                    int indi = fmin(n2-1,i+1);
+                    if(helper_f.obstacle_[indi*n1+j] > 0) {add = 2*LARGE_VALUE;}
+                    double evali = - phi_[indi*n1+j] - helper_f.V_[indi*n1+j] - add;
+
+                    add = 0;
+                    int indj = fmin(n1-1,j+1);
+                    if(helper_f.obstacle_[i*n1+indj] > 0) {add = 2*LARGE_VALUE;}
+                    double evalj = - phi_[i*n1+indj] - helper_f.V_[i*n1+indj] - add;
+
+                    if((evalim>lambda && evali<-LARGE_VALUE) || (evali>lambda && evalim<-LARGE_VALUE) || (evaljm>lambda && evalj<-LARGE_VALUE) || (evalj>lambda && evaljm<-LARGE_VALUE))
+                        push_mu_[i*n1+j] = -LARGE_VALUE;
+                    else if((evalim-lambda) * (evali-lambda) < 0 || (evaljm-lambda) * (evalj-lambda) < 0 ||
+                        (evalim) * (evali) < 0 || (evaljm) * (evalj) < 0){
+                        push_mu_[i*n1+j] = 0;
+                    }else{
+                        push_mu_[i*n1+j] = -LARGE_VALUE;
+                    }
+
+                }
+            }
+
+            string figurename = "trace";
+            init.save_image_opencv(push_mu_, figurename, iter, -1);
+
+            flt2d_->find_c_concave(push_mu_, push_mu_, 0.5);
+
+            for(int i=0;i<n1*n2;++i){
+                double add = 0;
+                if(helper_f.obstacle_[i] > 0) add = LARGE_VALUE;
+                double eval = - phi_[i] - helper_f.V_[i] - add;
+                if(eval < lambda && eval > 0) push_mu_[i] =  sqrt(push_mu_[i]);
+                else push_mu_[i] = -sqrt(push_mu_[i]);
+            }
+
+
+            sub_function_calculate_trace_constant_matt(C_tr1_, C_tr2_, helper_f, push_mu_, lambda);
+        }
+
+        
+
+        // inside
+        {
+            for(int i=0;i<n1*n2;++i) push_mu_[i] *= -1;
+
+            double C_tr1=0;
+            double C_tr2=0;
+
+            sub_function_calculate_trace_constant_matt(C_tr1, C_tr2, helper_f, push_mu_, lambda);
+
+            if(C_tr1 < C_tr1_) C_tr1_ = C_tr1;
+            if(C_tr2 < C_tr2_) C_tr2_ = C_tr2;
+        }
+        cout << endl;
     }
 
     void calculate_trace_theorem_constant_flavien(){
@@ -700,9 +704,9 @@ public:
         C_tr2_ = 6 * K_gamma;
     }
 
-    void calculate_trace_theorem_constant(Helper_U& helper_f, double lambda, int iter, Initializer& init){
+    void calculate_trace_theorem_constant(Helper_U& helper_f, double lambda, int iter, Initializer& init, const double* mu){
         // calculate_trace_theorem_constant_flavien();
-        calculate_trace_theorem_constant_matt(helper_f,lambda, iter, init);
+        calculate_trace_theorem_constant_matt(helper_f,lambda, iter, init, mu);
     }
 
     void start_OT(Helper_U& helper_f, const double* mu, const int outer_iter, Initializer& init){
@@ -764,32 +768,7 @@ public:
         */
         
         for(int iter = 0; iter < max_iteration_; ++iter){
-            
-            /* 
-                Calculating the relative error
-            */
 
-            if(iter % 10 == 0 && iter >= 0){
-                if(m_ == 2){
-                    calculate_c_transform_constant(C_c_transform, phi_, mu);
-                    set_coeff_m_2(phi_c1_, phi_c2_, mu_max, C_c_transform);
-                    calculate_c_transform_constant(C_c_transform, psi_, helper_f.DUstar_);
-                    set_coeff_m_2(psi_c1_, psi_c2_, mu_max, C_c_transform);    
-                }else{
-                    lambda = calculate_lambda(helper_f);
-                    infgradphi = calculate_infgradphi_on_level_set(lambda,helper_f.V_,helper_f.obstacle_);
-                    calculate_d1_d2_d3(d1, d2, d3, lambda, infgradphi, helper_f.V_);
-
-                    calculate_trace_theorem_constant(helper_f, lambda, iter, init);
-
-                    calculate_c_transform_constant(C_c_transform, phi_, mu);
-                    set_coeff(phi_c1_, phi_c2_, C_phi_, mu_max, d1, d2, d3, false, C_c_transform);
-                    // calculate_c_transform_constant(C_c_transform, psi_, helper_f.DUstar_);
-                    set_coeff(psi_c1_, psi_c2_, C_psi_, mu_max, d1, d2, d3, false, C_c_transform);    
-                }
-
-
-            }
 
             /*
                 Determinant version pushforward
@@ -797,11 +776,49 @@ public:
 
             sigma_forth = 1;
             sigma_back  = 1;
+
+
+            if((iter) % 10 == 0 && iter >= 0){
+                if(m_ == 2){
+                    calculate_c_transform_constant(C_c_transform, phi_, mu);
+                    set_coeff_m_2(phi_c1_, phi_c2_, mu_max, C_c_transform);
+                }else{
+                    lambda = calculate_lambda(helper_f);
+                    infgradphi = calculate_infgradphi_on_level_set(lambda,helper_f.V_,helper_f.obstacle_,mu);
+                    calculate_d1_d2_d3(d1, d2, d3, lambda, infgradphi, helper_f.V_);
+                    calculate_trace_theorem_constant(helper_f, lambda, iter, init, mu);
+                    calculate_c_transform_constant(C_c_transform, phi_, mu);
+                    set_coeff(phi_c1_, phi_c2_, C_phi_, mu_max, d1, d2, d3, false, C_c_transform);
+                }
+            }
             
             error_mu = perform_OT_iteration_forth_det(helper_f,sigma_forth,W2_value_,mu,iter);
+
+            if((iter) % 10 == 0 && iter >= 0){
+                if(m_ == 2){
+                    calculate_c_transform_constant(C_c_transform, psi_, helper_f.DUstar_);
+                    set_coeff_m_2(psi_c1_, psi_c2_, mu_max, C_c_transform);    
+                }else{
+                    lambda = calculate_lambda(helper_f);
+                    infgradphi = calculate_infgradphi_on_level_set(lambda,helper_f.V_,helper_f.obstacle_,mu);
+                    calculate_d1_d2_d3(d1, d2, d3, lambda, infgradphi, helper_f.V_);
+                    calculate_trace_theorem_constant(helper_f, lambda, iter, init, mu);
+                    set_coeff(psi_c1_, psi_c2_, C_psi_, mu_max, d1, d2, d3, false, C_c_transform);    
+                }
+            }
+
+            if(iter%skip==skip-1){
+                string figurename = "output";
+                // for(int i=0;i<n1*n2;++i) push_mu_[i] = fabs(push_mu_[i] - mu[i]);
+                for(int i=0;i<n1*n2;++i) push_mu_[i] = fabs(helper_f.DUstar_[i] - push_mu_[i]);
+                init.save_image_opencv(push_mu_, figurename,(iter+1)/skip, mu_max);
+                // init.save_image_opencv(helper_f.DUstar_,figurename,(iter+1)/skip, mu_max);
+            }
+
+
             error_nu = perform_OT_iteration_back_det (helper_f,sigma_back, W2_value_,mu,iter);
             
-            error=fmin(error_mu,error_nu);
+            error=fmax(error_mu,error_nu);
 
             /* 
                 Stopping Condition 
@@ -829,11 +846,6 @@ public:
                 // for(int i=0;i<100;++i) cout << R_arr_[i] << " ";
 
                 cout << flush;
-
-                string figurename = "output";
-                for(int i=0;i<n1*n2;++i) push_mu_[i] = fabs(push_mu_[i] - mu[i]);
-                init.save_image_opencv(push_mu_, figurename,(iter+1)/skip, mu_max);
-                // init.save_image_opencv(helper_f.DUstar_,figurename,(iter+1)/skip, mu_max);
             }
         }
     }
@@ -880,7 +892,7 @@ int main(int argc, char** argv){
     // create_mu_from_image(mu,n1,n2);
     // create_mu_from_image2(mu,n1,n2);
 
-    for(int i=0;i<n1*n2;++i) mu[i] *= 0.1;
+    for(int i=0;i<n1*n2;++i) mu[i] *= 0.3;
 
     cout << "XXX Starting Gradient Flow XXX" << "\n";
 
@@ -900,14 +912,14 @@ int main(int argc, char** argv){
 
     double a = 5;
     // init_entropy_sine(helper_f.V_, 5, 3, a, n1, n2);
-    init_entropy_quadratic(helper_f.V_, 0.5, 0.8, a, n1, n2);
+    init_entropy_quadratic(helper_f.V_, 0.9, 0.9, a, n1, n2);
 
-    // init_obstacle_from_image(obstacle, n1, n2);
-    // init_obstacle_two_moons(obstacle, n1, n2);
-    // init_obstacle_pac_man(obstacle, n1, n2);
-    // init_obstacle_circle(obstacle, 0.5, 0.5, 0.25, n1, n2);
-    // init_obstacle_two_circle(obstacle, 0.5 + 0.2*cos(0), 0.5 + 0.2*sin(0), 0.1, 0.5 - 0.2*cos(0), 0.5 - 0.2*sin(0), 0.1, n1, n2);
-    init_obstacle_four_circle(helper_f.obstacle_, 0.5 + 0.2*cos(0), 0.5 + 0.2*sin(0), 0.1, 0.5 + 0.2*cos(M_PI+0), 0.5 + 0.2*sin(M_PI+0), 0.1, 0.5 + 0.2*cos(0.5*M_PI+0), 0.5 + 0.2*sin(0.5*M_PI+0), 0.1, 0.5 + 0.2*cos(1.5*M_PI+0), 0.5 + 0.2*sin(1.5*M_PI+0), 0.1, n1, n2);
+    init_obstacle_from_image(helper_f.obstacle_, n1, n2);
+    // init_obstacle_two_moons(helper_f.obstacle_, n1, n2);
+    // init_obstacle_pac_man(helper_f.obstacle_, n1, n2);
+    // init_obstacle_circle(helper_f.obstacle_, 0.5, 0.5, 0.25, n1, n2);
+    // init_obstacle_two_circle(helper_f.obstacle_, 0.5 + 0.2*cos(0), 0.5 + 0.2*sin(0), 0.1, 0.5 - 0.2*cos(0), 0.5 - 0.2*sin(0), 0.1, n1, n2);
+    // init_obstacle_four_circle(helper_f.obstacle_, 0.5 + 0.2*cos(0), 0.5 + 0.2*sin(0), 0.1, 0.5 + 0.2*cos(M_PI+0), 0.5 + 0.2*sin(M_PI+0), 0.1, 0.5 + 0.2*cos(0.5*M_PI+0), 0.5 + 0.2*sin(0.5*M_PI+0), 0.1, 0.5 + 0.2*cos(1.5*M_PI+0), 0.5 + 0.2*sin(1.5*M_PI+0), 0.1, n1, n2);
 
     cout << setprecision(6);
 
@@ -926,7 +938,7 @@ int main(int argc, char** argv){
 
     double sum = 0;
 
-    init_entropy_quadratic(helper_f.V_, 0.5 - 0.3*cos(0),  0.5 - 0.3*cos(0), a, n1, n2);
+    // init_entropy_quadratic(helper_f.V_, 0.5 - 0.3*cos(0),  0.5 - 0.3*cos(0), a, n1, n2);
 
     for(int n=0;n<nt;++n){
         clock_t time_outer = clock();
@@ -944,10 +956,10 @@ int main(int argc, char** argv){
         if(plot > 0) init.save_image_opencv(mu,helper_f.obstacle_,figurename,n+1);
         // if(plot > 0) init.save_image_opencv(mu,figurename,n+1);
 
-        double theta = 2 * tau * (n+1);
-        init_entropy_quadratic(helper_f.V_, 0.5 - 0.3*cos(theta*2),  0.5 - 0.3*cos(theta*2), a, n1, n2);
+        // double theta = 2 * tau * (n+1);
+        // init_entropy_quadratic(helper_f.V_, 0.5 - 0.3*cos(theta*2),  0.5 - 0.3*cos(theta*2), a, n1, n2);
 
-        init_obstacle_four_circle(helper_f.obstacle_, 0.5 + 0.2*cos(theta*1.12), 0.5 + 0.2*sin(theta*1.12), 0.1, 0.5 + 0.2*cos(M_PI+theta*1.12), 0.5 + 0.2*sin(M_PI+theta*1.12), 0.1, 0.5 + 0.2*cos(0.5*M_PI+theta*1.12), 0.5 + 0.2*sin(0.5*M_PI+theta*1.12), 0.1, 0.5 + 0.2*cos(1.5*M_PI+theta*1.12), 0.5 + 0.2*sin(1.5*M_PI+theta*1.12), 0.1, n1, n2);
+        // init_obstacle_four_circle(helper_f.obstacle_, 0.5 + 0.2*cos(theta*1.12), 0.5 + 0.2*sin(theta*1.12), 0.1, 0.5 + 0.2*cos(M_PI+theta*1.12), 0.5 + 0.2*sin(M_PI+theta*1.12), 0.1, 0.5 + 0.2*cos(0.5*M_PI+theta*1.12), 0.5 + 0.2*sin(0.5*M_PI+theta*1.12), 0.1, 0.5 + 0.2*cos(1.5*M_PI+theta*1.12), 0.5 + 0.2*sin(1.5*M_PI+theta*1.12), 0.1, n1, n2);
 
     }
 
