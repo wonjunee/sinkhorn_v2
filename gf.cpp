@@ -484,7 +484,7 @@ public:
                 phimax = fmax(phimax,-phi_[i]-helper_f.V_[i]);
             }
         }
-        return phimax * 0.1;
+        return phimax * 0.01;
         // return fmax(0.1, phimax * 0.05);
     }
 
@@ -536,15 +536,18 @@ public:
             else          push_mu_[i] = -LARGE_VALUE;
         }
 
-        flt2d_->find_c_concave(push_mu_, push_mu_, tau_);
+        flt2d_->find_c_concave(push_mu_, push_mu_, 1);
 
         for(int i=0;i<n1*n2;++i){
-            phi_[i] = - gamma_ * mprime_ * pow(mu[i],m_-1) + sqrt(push_mu_[i]) - helper_f.V_[i];
+            phi_[i] = - gamma_ * mprime_ * pow(mu[i],m_-1) - helper_f.V_[i];
+            phi_[i] +=  sqrt(push_mu_[i]);
         }
 
-        // for(int i=0;i<n1*n2;++i) phi_[i] = - gamma_ * mprime_ * pow(mu[i],m_-1) - helper_f.V_[i];
 
-        // fftps_->solve_heat_equation(phi_,tau_);
+        // for(int i=0;i<n1*n2;++i){
+        //     if(helper_f.obstacle_[i]==0)
+        //     phi_[i] = - gamma_ * mprime_ * pow(mu[i],m_-1) - helper_f.V_[i];
+        // }
     }
 
     void calculate_d1_d2_d3(double& d1, double& d2, double& d3, const double lambda, const double infgradphi, const double* nu){
@@ -608,20 +611,20 @@ public:
             }
         }
         
-        for(int ri=3;ri<n1;++ri) R_arr_[ri] = fmax(R_arr_[ri], R_arr_[ri-1]);    
+        for(int ri=4;ri<n1;++ri) R_arr_[ri] = fmax(R_arr_[ri], R_arr_[ri-1]);    
 
         double max_distance = 0; for(int i=0;i<n1*n2;++i) max_distance = fmax(max_distance, -push_mu_[i]);
         double R = LARGE_VALUE;
-        for(int ri=2;ri<n1;++ri){
+        for(int ri=3;ri<n1;++ri){
             if(1.0*ri/n1 > max_distance) break;
-            R = fmin(R, R_arr_[ri] + 0.5*n1/(ri+1));
+            R = fmin(R, R_arr_[ri] + 0.1*n1/(ri+1));
         }
 
         printf("R : %f\t", R);
 
         double C = fmax(R, 1);
         double eps = n1;
-        C_tr1 = C / eps + C/2;
+        C_tr1 = C / eps + C;
         C_tr2 = eps / C;
     }
 
@@ -632,12 +635,12 @@ public:
             for(int i=0;i<n2;++i){
                 for(int j=0;j<n1;++j){
                     double add = 0;
-                    int indim = fmax(0,i-1);
+                    int indim = i;
                     if(helper_f.obstacle_[indim*n1+j] > 0) {add = 2*LARGE_VALUE;}
                     double evalim = - phi_[indim*n1+j] - helper_f.V_[indim*n1+j] - add;
 
                     add = 0;
-                    int indjm = fmax(0,j-1);
+                    int indjm = j;
                     if(helper_f.obstacle_[i*n1+indjm] > 0) {add = 2*LARGE_VALUE;}
                     double evaljm = - phi_[i*n1+indjm] - helper_f.V_[i*n1+indjm] - add;
 
@@ -653,7 +656,7 @@ public:
 
                     if((evalim>lambda && evali<-LARGE_VALUE) || (evali>lambda && evalim<-LARGE_VALUE) || (evaljm>lambda && evalj<-LARGE_VALUE) || (evalj>lambda && evaljm<-LARGE_VALUE))
                         push_mu_[i*n1+j] = -LARGE_VALUE;
-                    else if((evalim-lambda) * (evali-lambda) < 0 || (evaljm-lambda) * (evalj-lambda) < 0 ||
+                    else  if((evalim-lambda) * (evali-lambda) < 0 || (evaljm-lambda) * (evalj-lambda) < 0 ||
                         (evalim) * (evali) < 0 || (evaljm) * (evalj) < 0){
                         push_mu_[i*n1+j] = 0;
                     }else{
