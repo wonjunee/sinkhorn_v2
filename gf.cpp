@@ -540,7 +540,7 @@ public:
 
         for(int i=0;i<n1*n2;++i){
             phi_[i] = - gamma_ * mprime_ * pow(mu[i],m_-1) - helper_f.V_[i];
-            phi_[i] +=  sqrt(push_mu_[i]);
+            phi_[i] +=  pow(push_mu_[i],0.25);
         }
 
 
