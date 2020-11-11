@@ -8,7 +8,7 @@ ifdef PHYSICELL_CPP
 endif
 
  
-CFLAGS     :=  -O3 -std=c++11 -I./lib -Wall
+CFLAGS     :=  -O3 -std=c++11 -I./src -Wall
 # FFTW library
 FFTWFLAG   := -I/usr/local/include  -L/usr/local/lib -lfftw3
 # opencv library: for image
@@ -18,10 +18,10 @@ OPENCVFLAG := `pkg-config --cflags --libs opencv4`
  
 COMPILE_COMMAND := $(CC) $(CFLAGS) $(FFTWFLAG) $(OPENCVFLAG) $(OPENMPFLAG)
  
-OUTPUT := gf
+OUTPUT := bfm
  
-all: gf.cpp
-	$(COMPILE_COMMAND) -o $(OUTPUT) gf.cpp
+all: src/main.cpp
+	$(COMPILE_COMMAND) -o $(OUTPUT) src/main.cpp
 
 clean:
 	rm -f *.o $(OUTPUT).*

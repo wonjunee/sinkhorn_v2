@@ -10,11 +10,11 @@
 using namespace std;
 using namespace cv;
 
-void create_csv_parameters(int n1,int n2,int nt,double tau, double gamma, double m){
+void create_csv_parameters(int n1,int n2){
     ofstream outfile;
     string filename = "./data//parameters.csv";
     outfile.open(filename);
-    outfile<<n1<<"\n"<<n2<<"\n"<<nt<<"\n"<<tau<<"\n"<<gamma<<"\n"<<m;
+    outfile<<n1<<"\n"<<n2;
     outfile.close();
 }
 
@@ -59,13 +59,13 @@ void create_mu_gaussian(double* mu,double px,double py,double var,int n1,int n2)
     }
 }
 
-void create_mu_square(double* mu,double px,double py,double var,int n1,int n2){
+void create_mu_square(double* mu,double px,double py,double width,int n1,int n2){
     double sum=0;
     for(int i=0;i<n2;++i){
         for(int j=0;j<n1;++j){
             double x=1.0*(j+0.5)/n1;
             double y=1.0*(i+0.5)/n2;
-            if(fabs(x-px)<0.1 && fabs(y-py)<0.1){
+            if(fabs(x-px)<width && fabs(y-py)<width){
                 mu[i*n1+j] = 1;    
             }
             sum+=mu[i*n1+j];
@@ -587,6 +587,53 @@ void init_obstacle_pac_man(unsigned char* obstacle, int n1, int n2){
         }
     }
 }
+
+
+/* create an obstacle from an external image */
+void init_entropy_from_image(double* V, int n1, int n2){
+
+    // Quadratic potential V = 1/2 a ( (x-xc)^2 + (y-yc)^2 )
+
+    // Mat src = imread("../external-images/paw.png");
+    // Mat src = imread("../external-images/two-moons.jpeg");
+    Mat src = imread("../external-images/fruits.png");
+
+    Mat src_gray;
+
+    resize(src,src_gray,Size(n2,n1));
+
+    cvtColor(src_gray, src_gray, COLOR_BGR2GRAY );
+
+    src_gray.convertTo(src_gray, CV_8U);
+
+    Mat dst;
+
+    int DELAY_BLUR = 100;
+    int MAX_KERNEL_LENGTH = 5;
+
+    for ( int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2 )
+    {
+        GaussianBlur( src_gray, dst, Size( i, i ), 0, 0 );
+    }
+
+    for(int i=0;i<n2;++i){
+        for(int j=0;j<n1;++j){
+            int a = (int) dst.ptr<unsigned char>(i)[j];
+
+            V[i*n1+j] = a/255.0;
+        }
+    }
+
+    if(true){  // show image
+        const char* source_window = "Potential";
+        namedWindow( source_window );
+        imshow( source_window, dst );
+
+        waitKey(0);
+    }
+}
+
+
 
 /* create an obstacle from an external image */
 void init_obstacle_from_image(unsigned char* obstacle, int n1, int n2){

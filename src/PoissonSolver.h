@@ -81,9 +81,9 @@ public:
         }
 
         fftw_execute(planIn);
-        // workspace[0]=0;
+        workspace[0]=0;
 
-        for(int i=0;i<n1*n2;++i){
+        for(int i=1;i<n1*n2;++i){
             workspace[i]/=4*(n1)*(n2)*(c1+c2*kernel[i])/sigma;
         }
 
