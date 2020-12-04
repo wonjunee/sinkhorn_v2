@@ -6,10 +6,6 @@
 #include <fftw3.h>
 #include <fstream>
 #include <vector>
-#include "Pushforward.h"
-// #include "FLT.h"
-#include "FLT_bf.h"
-#include "PoissonSolver.h"
 #include "Accessory.h"
 #include "Plotting.h"
 #include "Points.h"
@@ -22,7 +18,7 @@ const int DIM = 2;
 int main(int argc, char** argv){
     if(argc!=7){
         cout<<"Do the following:"<<"\n";
-        cout<< argv[0] << " [n1] [n2] [max_iteration] [tolerance] [smooth] [nt]"<<"\n";
+        cout<< argv[0] << " [n1] [n2] [max_iteration] [tolerance] [sigma] [nt]"<<"\n";
         return 0;
     }
 
@@ -30,7 +26,7 @@ int main(int argc, char** argv){
     int n2=stoi(argv[2]);
     int max_iteration=stoi(argv[3]);
     double tolerance=stod(argv[4]);
-    double smooth=stod(argv[5]);
+    double sigma=stod(argv[5]);
     int nt=stoi(argv[6]);
 
     
@@ -48,11 +44,11 @@ int main(int argc, char** argv){
     create_csv_parameters(n1,n2);
 
     /* Initialize mu and nu */
-    int num_points_mu = 4;
-    int num_points_nu = 4;
+    int n_mu = 3;
+    int n_nu = 3;
 
-    Points* mu = new Points(DIM, num_points_mu);
-    Points* nu = new Points(DIM, num_points_nu);
+    Points* mu = new Points(DIM, n_mu);
+    Points* nu = new Points(DIM, n_nu);
 
     for(int p=0;p<mu->num_points_;++p){
         (*mu)(p,0) = 0.9*rand()/RAND_MAX + 0.05;
@@ -64,6 +60,78 @@ int main(int argc, char** argv){
         (*nu)(p,1) = 0.9*rand()/RAND_MAX + 0.05;
     }
 
+    if(true){
+        (*mu)(0,0) = 0.1;
+        (*mu)(0,1) = 0.1;
+
+        (*mu)(1,0) = 0.1;
+        (*mu)(1,1) = 0.4;
+
+        (*mu)(2,0) = 0.1;
+        (*mu)(2,1) = 0.5;
+
+        (*nu)(0,0) = 0.7;
+        (*nu)(0,1) = 0.1;
+
+        (*nu)(1,0) = 0.7;
+        (*nu)(1,1) = 0.10000001;
+
+        (*nu)(2,0) = 0.7;
+        (*nu)(2,1) = 0.10001;
+    }
+
+    double sigma_back = sigma;
+
+    if(false){
+        double minval = 1;
+        for(int j=0;j<n_mu;++j){
+            double mux = (*mu)(j,0);
+            double muy = (*mu)(j,1);
+            for(int j1=j+1;j1<n_mu;++j1){
+                double mu1x = (*mu)(j1,0);
+                double mu1y = (*mu)(j1,1);
+
+                minval = fmin(minval, pow(mux-mu1x,2) + pow(muy-mu1y,2));
+            }
+        }    
+        printf("mu min: %f  ", minval);
+
+        double minval2 = 1;
+        for(int i=0;i<n_nu;++i){
+            double nux = (*nu)(i,0);
+            double nuy = (*nu)(i,1);
+            for(int i1=i+1;i1<n_nu;++i1){
+                double nu1x = (*nu)(i1,0);
+                double nu1y = (*nu)(i1,1);
+
+                minval2 = fmin(minval2, pow(nux-nu1x,2) + pow(nuy-nu1y,2));
+            }
+        }    
+
+        printf("nu min: %f\n", minval2);
+
+        // double minval3 = 1;
+        // for(int i=0;i<n_nu;++i){
+        //     double nux = (*nu)(i,0);
+        //     double nuy = (*nu)(i,1);
+        //     for(int j=i+1;j<n_mu;++j){
+        //         double nu1x = (*mu)(j,0);
+        //         double nu1y = (*mu)(j,1);
+
+        //         minval3 = fmin(minval3, pow(nux-nu1x,2) + pow(nuy-nu1y,2));
+        //     }
+        // }    
+
+        // printf("nu min: %f\n", minval3);
+
+        sigma = minval;
+        sigma_back = minval2;
+
+        // sigma = 0.3*fmin(minval3, sigma);
+    }
+
+    
+
     cout << "XXX Starting particle BFM XXX" << "\n";
 
     cout << "\n";
@@ -74,7 +142,9 @@ int main(int argc, char** argv){
     printf("%s", ctime(&my_time));
 
     /* Initialize BFM */
-    BackAndForth bf(n1,n2,max_iteration,tolerance,smooth);
+    BackAndForth bf(n1,n2,n_mu,n_nu,max_iteration,tolerance,sigma);
+    bf.sigma_forth_ = sigma;
+    bf.sigma_back_ = sigma_back;
 
     string figurename = "barenblatt";
 
