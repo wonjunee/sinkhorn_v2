@@ -10,6 +10,7 @@
 #include <fstream>
 #include <vector>
 #include "Accessory.h"
+#include "PoissonSolver.h"
 #include "Plotting.h"
 
 using namespace std;
@@ -73,8 +74,6 @@ public:
 
     double epsilon_;
 
-    poisson_solver* fftps_;
-
     BackAndForth(int n1, int n2, int n_mu, int n_nu, int max_iteration, double tolerance, double sigma){
 
         epsilon_ = 1e-8;
@@ -117,12 +116,6 @@ public:
 
         phi_c2_ = 200;
         psi_c2_ = 200;
-
-        clock_t time;
-        time=clock();
-        fftps_ = new poisson_solver(n1,n2);
-        time=clock()-time;
-        printf ("\nCPU time for FFT: %f seconds.\n\n",((float)time)/CLOCKS_PER_SEC);
     }
 
     ~BackAndForth(){
@@ -138,16 +131,30 @@ public:
         delete[] push_mu_idx_;
         delete[] push_nu_idx_;
 
-        delete fftps_;
-
         printf("bfm deconstruction done\n");
     }
 
     void Initialize_C_mat_(Points* mu, Points* nu){
         /** 
          *       Create a cost function 
+         *
+         * This function is used only once in the beginning.
+         *
          * C_mat_ is a matrix C (num_points_nu x num_points_mu)
          * C_{ij} is a distance between mu_j and nu_i
+         *
+         * C_mu_ is a symmetric (n_mu x n_mu) matrix.
+         * C_mu_{ij} is a distance between mu_i and mu_j
+         *
+         * C_nu_ is a symmetric (n_nu x n_nu) matrix.
+         * C_nu_{ij} is a distance between nu_i and nu_j
+         *
+         * C_mu_sum_ is a (n_mu) vector, each index is a sum of row of C_mu_.
+         * C_mu_sum_i = \sum_{j=1}^{n_mu} (-\Delta)^{-1} \delta_{x_j} (x_i)
+         *
+         * C_nu_sum_ is a (n_nu) vector, each index is a sum of row of C_nu_.
+         * C_nu_sum_i = \sum_{j=1}^{n_nu} (-\Delta)^{-1} \delta_{y_j} (y_i)
+         *
         **/
 
         for(int i=0;i<n_nu;++i){
@@ -219,13 +226,12 @@ public:
                     min_idx = j;
                 }
             }
-            phi_g_[i] = min_val;
-
+            phi_g_[i]       = min_val;
             push_nu_idx_[i] = min_idx;
         }
     }
 
-    void compute_phi_c_transform(double* psi_f_, int* push_mu_idx_, double* phi_g_, Points* mu, Points* nu){
+    void compute_phi_c_transform(double* psi_f_, int* push_mu_idx_, const double* phi_g_, Points* mu, Points* nu){
         for(int j=0;j<n_mu;++j){
             double eval = C_mat_[0*n_mu+j] - phi_g_[0];
             double min_val = eval;
@@ -237,45 +243,10 @@ public:
                     min_idx = i;
                 }
             }
-            psi_f_[j] = min_val;
-
+            psi_f_[j]       = min_val;
             push_mu_idx_[j] = min_idx;
         }
     }
-
-    double calculate_dual_value(const double* phi, const double* psi, const double* mu, const double* nu){
-
-         // Here psi is assumed to correspond to the c-transform of phi
-        
-        double term1=0;
-        double term2=0;
-
-        for(int i=0;i<n2;++i){
-            for(int j=0;j<n1;++j){
-                term1 += phi[i*n1+j]*nu[i*n1+j];
-                term2 += psi[i*n1+j]*mu[i*n1+j];
-            }
-        }
-        
-        
-        return (term2 + term1)/(1.0*n1*n2);
-    }
-
-    double calculate_h_minus_1(const double* push_mu, const double* DUstar_){
-        double error=0;
-        for(int i=0;i<n1*n2;++i){
-            double value=-push_mu[i]+DUstar_[i];
-            error+=value*fftps_->workspace[i];
-        }
-        return error/(1.0*n1*n2);
-    }
-
-    double calculate_L1_error(const double* push_mu, const double* mu){
-        double error = 0;
-        for(int i=0;i<n1*n2;++i) error += fabs(push_mu[i] - mu[i]);
-        return error/(1.0*n1*n2);
-    }
-
 
     /**
         Update sigma based on Goldstein scheme
@@ -383,11 +354,6 @@ public:
         printf("iter: %5d    dual: %8.4f %8.4f    W2: %8.4f %8.4f\n", iter+1, dual_forth, dual_back, W2_value, W2_value_back);
     }
 
-    void set_coeff(double& c1, double& c2, const double mu_max, const double C_c_transform){
-        c1 = 0;
-        c2 = C_c_transform;
-    }
-
     bool check_collides(int* push_mu_idx_){
         for(int j=0;j<n_mu;++j){
             int j_idx = push_mu_idx_[j];
@@ -395,9 +361,7 @@ public:
             for(int j1=j+1;j1<n_mu;++j1){
                 int j1_idx = push_mu_idx_[j1];
 
-                if(j_idx == j1_idx){
-                    return false;
-                }
+                if(j_idx == j1_idx) return false;
             }
         }
         return true;
@@ -412,13 +376,6 @@ public:
         double error_mu = 1.0;
         double error_nu = 1.0;
         double error=1.0;
-
-        /* Initialize coefficients for siga update */
-
-        beta_1_ =0.1;
-        beta_2_ =0.9;
-        alpha_1_=1.05;
-        alpha_2_=0.95;
 
         /* Calculate sup(mu) */
 
