@@ -34,6 +34,9 @@ public:
     double W2_value_;
     double W2_value_back_;
 
+    double dual_forth_;
+    double dual_back_;
+
     double sigma_; // Coefficients for trace theorem
     double sigma_forth_;
     double sigma_back_;
@@ -59,15 +62,17 @@ public:
 
     Points*  push_mu_;
     Points*  push_nu_;
-    double* push_mu_grid_;
 
-    double* mu_grid_;
-    double* nu_grid_;
+    int* push_mu_idx_;
+    int* push_nu_idx_;
 
     double* C_mat_; // cost matrix
 
     double* C_mu_;  // cost matrix for mu
     double* C_nu_;  // cost matrix for mu
+
+    double* C_mu_sum_;
+    double* C_nu_sum_;
 
     double epsilon_;
 
@@ -77,7 +82,7 @@ public:
 
     BackAndForth(int n1, int n2, int n_mu, int n_nu, int max_iteration, double tolerance, double sigma){
 
-        epsilon_ = 1e-9;
+        epsilon_ = 1e-8;
 
         this->n1=n1;
         this->n2=n2;
@@ -102,12 +107,11 @@ public:
         C_mu_  = new double[n_mu * n_mu];
         C_nu_  = new double[n_nu * n_nu];
 
-        mu_grid_ = new double[n1*n2];
-        nu_grid_ = new double[n1*n2];
+        C_mu_sum_  = new double[n_mu];
+        C_nu_sum_  = new double[n_nu];
 
-        push_mu_grid_ = new double[n1*n2];
-
-        flt2d_  = new FLT2D(n1,n2);
+        push_mu_idx_ = new int[n_mu];
+        push_nu_idx_ = new int[n_nu];
 
         // set a constant for the trace theorem
         C_tr1_ = 1;
@@ -131,16 +135,14 @@ public:
         printf("bfm deconstruction\n");
         delete[] C_mat_;
 
-        printf("here\n");
-        delete push_mu_;
-        delete push_nu_;
-
         printf("there\n");
 
-        delete[] mu_grid_;
-        delete[] nu_grid_;
+        delete[] C_mu_sum_;
+        delete[] C_nu_sum_;
+        
+        delete[] push_mu_idx_;
+        delete[] push_nu_idx_;
 
-        delete flt2d_;
         delete fftps_;
 
         printf("bfm deconstruction done\n");
@@ -166,38 +168,58 @@ public:
         }
 
         for(int i=0;i<n_nu;++i){
-            for(int j=0;j<n_nu;++j){
+            double nux = (*nu)(i,0);
+            double nuy = (*nu)(i,1);
+            for(int j=i;j<n_nu;++j){
                 double mux = (*nu)(j,0);
                 double muy = (*nu)(j,1);
-                double nux = (*nu)(i,0);
-                double nuy = (*nu)(i,1);
                 double px  = mux - nux;
                 double py  = muy - nuy;
                 C_nu_[i*n_nu+j] = 0.5 * (px*px + py*py);
+                C_nu_[j*n_nu+i] = C_nu_[i*n_nu+j];
             }
         }
 
         for(int i=0;i<n_mu;++i){
-            for(int j=0;j<n_mu;++j){
+            double nux = (*mu)(i,0);
+            double nuy = (*mu)(i,1);
+            for(int j=i;j<n_mu;++j){
                 double mux = (*mu)(j,0);
                 double muy = (*mu)(j,1);
-                double nux = (*mu)(i,0);
-                double nuy = (*mu)(i,1);
                 double px  = mux - nux;
                 double py  = muy - nuy;
                 C_mu_[i*n_mu+j] = 0.5 * (px*px + py*py);
+                C_mu_[j*n_mu+i] = C_mu_[i*n_mu+j];
             }
+        }
+
+        for(int j=0;j<n_mu;++j){
+            double val = 0;
+            for(int j1=0;j1<n_mu;++j1){
+                double eval = sqrt(C_mu_[j*n_mu+j1]*2);
+                val += - 1.0/(2.0*M_PI) * log(epsilon_ + eval);
+            }
+            C_mu_sum_[j] = val;
+        }
+
+        for(int i=0;i<n_nu;++i){
+            double val = 0;
+            for(int i1=0;i1<n_nu;++i1){
+                double eval = sqrt(C_nu_[i*n_nu+i1]*2);
+                val += - 1.0/(2.0*M_PI) * log(epsilon_ + eval);
+            }
+            C_nu_sum_[i] = val;
         }
     }
 
-    void compute_psi_c_transform(double* phi_g_, Points* push_nu_, const double* psi_f_, Points* mu, Points* nu){
+    void compute_psi_c_transform(double* phi_g_, Points* push_nu_, int* push_nu_idx_, const double* psi_f_, Points* mu, Points* nu){
         for(int i=0;i<n_nu;++i){
             double eval = C_mat_[i*n_mu+0] - psi_f_[0];
             double min_val = eval;
             int    min_idx = 0;
             for(int j=1;j<n_mu;++j){
                 eval = C_mat_[i*n_mu+j] - psi_f_[j];
-                if(eval <= min_val){
+                if(eval < min_val){
                     min_val = eval;
                     min_idx = j;
                 }
@@ -205,17 +227,19 @@ public:
             phi_g_[i] = min_val;
             (*push_nu_)(i,0) = (*mu)(min_idx,0);
             (*push_nu_)(i,1) = (*mu)(min_idx,1);
+
+            push_nu_idx_[i] = min_idx;
         }
     }
 
-    void compute_phi_c_transform(double* psi_f_, Points* push_mu_, double* phi_g_, Points* mu, Points* nu){
+    void compute_phi_c_transform(double* psi_f_, Points* push_mu_, int* push_mu_idx_, double* phi_g_, Points* mu, Points* nu){
         for(int j=0;j<n_mu;++j){
             double eval = C_mat_[0*n_mu+j] - phi_g_[0];
             double min_val = eval;
             int    min_idx = 0;
             for(int i=1;i<n_nu;++i){
                 eval = C_mat_[i*n_mu+j] - phi_g_[i];
-                if(eval <= min_val){
+                if(eval < min_val){
                     min_val = eval;
                     min_idx = i;
                 }
@@ -223,6 +247,8 @@ public:
             psi_f_[j] = min_val;
             (*push_mu_)(j,0) = (*nu)(min_idx,0);
             (*push_mu_)(j,1) = (*nu)(min_idx,1);
+
+            push_mu_idx_[j] = min_idx;
         }
     }
 
@@ -290,75 +316,46 @@ public:
         return sum;
     }
 
-    double perform_OT_iteration_back_det(double& sigma, double& W2_value, Points* mu, Points* nu, const int iter){
+    double calculate_W2_value(Points* push_mu, Points* mu){
+        double sum = 0;
+        for(int j=0;j<n_mu;++j){
+            double px = (*push_mu)(j,0);
+            double py = (*push_mu)(j,1);
+
+            double mx = (*mu)(j,0);
+            double my = (*mu)(j,1);
+
+            double diffx = px - mx;
+            double diffy = py - my;
+            sum += 0.5 * (diffx*diffx + diffy*diffy);
+        }
+        return sum;
+    }
+
+    double perform_OT_iteration_back_det(double& sigma, double& W2_value, double& dual_value, Points* mu, Points* nu, const int iter){
         double W2_value_previous = 0;
         double error_nu = 0;
 
-        compute_phi_c_transform(psi_f_, push_mu_, phi_g_, mu, nu);
-        compute_psi_c_transform(phi_g_, push_nu_, psi_f_, mu, nu);
+        compute_phi_c_transform(psi_f_, push_mu_, push_mu_idx_, phi_g_, mu, nu);
+        compute_psi_c_transform(phi_g_, push_nu_, push_nu_idx_, psi_f_, mu, nu);
 
 
         for(int j=0;j<n_mu;++j){
 
-            double update_val = 0;
-            // update_val += - sigma/(2.0*M_PI) * log(epsilon_);
-            // update_val += - sigma/(2.0*M_PI) * (-LARGE_VALUE);
-            double mux = (*mu)(j,0);
-            double muy = (*mu)(j,1);
-
-            for(int j1=0;j1<n_mu;++j1){
-                double nux = (*mu)(j1,0);
-                double nuy = (*mu)(j1,1);
-                double px  = mux - nux;
-                double py  = muy - nuy;
-
-                double eval= sqrt(px*px + py*py);
-
-                update_val += - sigma/(2.0*M_PI) * log(epsilon_ + eval);
-                // if(eval == 0) update_val += LARGE_VALUE;
-            }
+            double update_val = sigma*C_mu_sum_[j];
 
             for(int i=0;i<n_nu;++i){
-                double nux = (*push_nu_)(i,0);
-                double nuy = (*push_nu_)(i,1);
-                double px  = mux - nux;
-                double py  = muy - nuy;
-
-                double eval= sqrt(px*px + py*py);
-
+                double eval = sqrt(C_mu_[j*n_mu+push_nu_idx_[i]]*2);
                 update_val += sigma/(2.0*M_PI) * log(epsilon_ + eval);
-                // if(eval == 0) update_val -= LARGE_VALUE;
-
-                // if(eval > 0) update_val += sigma/(2.0*M_PI) * log(eval);
-                // else         update_val += sigma/(2.0*M_PI) * (-LARGE_VALUE);
-
             }
             psi_f_[j] += update_val;
         }
 
-        compute_psi_c_transform(phi_g_, push_nu_, psi_f_, mu, nu);
-        compute_phi_c_transform(psi_f_, push_mu_, phi_g_, mu, nu);
+        compute_psi_c_transform(phi_g_, push_nu_, push_nu_idx_, psi_f_, mu, nu);
+        compute_phi_c_transform(psi_f_, push_mu_, push_mu_idx_, phi_g_, mu, nu);
 
-        // flt2d_->find_c_concave(psi_,phi_,1);
-        // flt2d_->find_c_concave(phi_,psi_,1);
-
-        // calculate_gradient(vx_, vy_, phi_);
-
-        // // pushforward helper_f.DUstar_ -> push_mu_
-        // calculate_push_rho(push_mu_grid_, push_nu_, nu, vx_, vy_, phi_);
-
-        // fftps_->perform_inverse_laplacian(push_mu_grid_, mu_grid_, psi_c1_, psi_c2_, sigma);
-
-        // W2_value_previous=calculate_dual_value(phi_,psi_,mu_grid_,nu_grid_);
-        // double error_nu_h=calculate_h_minus_1(push_mu_grid_,mu_grid_);
-
-        // error_nu=calculate_L1_error(push_mu_grid_,mu_grid_);
-
-        // for(int i=0;i<n1*n2;++i) psi_[i] += fftps_->workspace[i];
-
-        // flt2d_->find_c_concave(psi_,phi_,1);
-
-        W2_value=calculate_dual_value(phi_g_, psi_f_, mu, nu);
+        dual_value = calculate_dual_value(phi_g_, psi_f_, mu, nu);
+        W2_value   = calculate_W2_value(push_mu_,mu);
 
         // sigma = update_sigma(sigma, W2_value, W2_value_previous, error_nu_h);
 
@@ -366,84 +363,31 @@ public:
     }
 
 
-    double perform_OT_iteration_forth_det(double& sigma, double& W2_value, Points* mu, Points* nu, const int iter){
+    double perform_OT_iteration_forth_det(double& sigma, double& W2_value, double& dual_value, Points* mu, Points* nu, const int iter){
         double W2_value_previous = 0;
         double error_mu = 1;
 
-        compute_psi_c_transform(phi_g_, push_nu_, psi_f_, mu, nu);
-        compute_phi_c_transform(psi_f_, push_mu_, phi_g_, mu, nu);
+        compute_psi_c_transform(phi_g_, push_nu_, push_nu_idx_, psi_f_, mu, nu);
+        compute_phi_c_transform(psi_f_, push_mu_, push_mu_idx_, phi_g_, mu, nu);
 
 
         for(int i=0;i<n_nu;++i){
 
-            double update_val = 0;
-            // update_val += - sigma/(2.0*M_PI) * log(epsilon_);
-            // phi_g_[i] += - sigma/(2.0*M_PI) * (-LARGE_VALUE);
-            double nux = (*nu)(i,0);
-            double nuy = (*nu)(i,1);
-
-            for(int i1=0;i1<n_nu;++i1){
-                double mux = (*nu)(i1,0);
-                double muy = (*nu)(i1,1);
-                double px  = mux - nux;
-                double py  = muy - nuy;
-
-                double eval= sqrt(px*px + py*py);
-
-                update_val += - sigma/(2.0*M_PI) * log(epsilon_ + eval);
-                // if(eval == 0) update_val += LARGE_VALUE;
-            }
+            double update_val = sigma*C_nu_sum_[i];
 
             for(int j=0;j<n_mu;++j){
-                double mux = (*push_mu_)(j,0);
-                double muy = (*push_mu_)(j,1);
-                double px  = mux - nux;
-                double py  = muy - nuy;
-
-                double eval= sqrt(px*px + py*py);
-
+                double eval = sqrt(C_nu_[i*n_nu+push_mu_idx_[j]]*2);
                 update_val += sigma/(2.0*M_PI) * log(epsilon_ + eval);
-                // if(eval == 0) update_val -= LARGE_VALUE;
-
-                // if(eval > 0){
-                //     phi_g_[i] += sigma/(2.0*M_PI) * log(eval);
-                // }else{
-                //     phi_g_[i] += sigma/(2.0*M_PI) * (-LARGE_VALUE);
-                // }
             }
-
             phi_g_[i] += update_val;
         }
 
-
-
-        compute_phi_c_transform(psi_f_, push_mu_, phi_g_, mu, nu);
-        compute_psi_c_transform(phi_g_, push_nu_, psi_f_, mu, nu);
-
+        compute_phi_c_transform(psi_f_, push_mu_, push_mu_idx_, phi_g_, mu, nu);
+        compute_psi_c_transform(phi_g_, push_nu_, push_nu_idx_, psi_f_, mu, nu);
         
 
-
-        // flt2d_->find_c_concave(phi_,psi_,1);
-        // flt2d_->find_c_concave(psi_,phi_,1);
-
-
-        // calculate_gradient(vx_, vy_, psi_);
-
-        // // pushforward mu -> push_mu_
-        // calculate_push_rho(push_mu_grid_, push_mu_, mu, vx_, vy_, psi_);
-            
-        // fftps_->perform_inverse_laplacian(push_mu_grid_, nu_grid_, phi_c1_, phi_c2_, sigma);
-
-        // W2_value_previous=calculate_dual_value(phi_,psi_,mu_grid_,nu_grid_);
-        // double error_mu_h=calculate_h_minus_1(push_mu_grid_,nu_grid_);
-
-        // error_mu=calculate_L1_error(push_mu_grid_, nu_grid_);
-
-        // for(int i=0;i<n1*n2;++i) phi_[i] += fftps_->workspace[i];
-
-        // flt2d_->find_c_concave(phi_,psi_,1);
-
-        W2_value=calculate_dual_value(phi_g_, psi_f_, mu, nu);
+        dual_value = calculate_dual_value(phi_g_, psi_f_, mu, nu);
+        W2_value   = calculate_W2_value(push_mu_,mu);
 
         // sigma = update_sigma(sigma, W2_value, W2_value_previous, error_mu_h);
 
@@ -452,8 +396,9 @@ public:
 
 // display_iteration(iter,W2_value,error_mu,error_nu,solution_error,C_phi,C_psi);
 
-    void display_iteration(const int iter,const double W2_value,const double W2_value_back,const double error_mu,const double error_nu) const{
-        printf("%*d c2: %*.2f %*.2f\tdual: %*f %*f\tL1 error: %*f %*f\n",5,iter+1, 8, phi_c2_, 8, psi_c2_, 8, W2_value, 8, W2_value_back, 8, error_mu, 8, error_nu);
+    void display_iteration(const int iter,const double W2_value,const double W2_value_back,const double dual_forth,const double dual_back,const double error_mu,const double error_nu) const{
+        // printf("%*d c2: %*.2f %*.2f\tdual: %*f %*f\tL1 error: %*f %*f\n",5,iter+1, 8, phi_c2_, 8, psi_c2_, 8, W2_value, 8, W2_value_back, 8, error_mu, 8, error_nu);
+        printf("iter: %5d    dual: %8.4f %8.4f    W2: %8.4f %8.4f\n", iter+1, dual_forth, dual_back, W2_value, W2_value_back);
     }
 
     void set_coeff(double& c1, double& c2, const double mu_max, const double C_c_transform){
@@ -502,27 +447,12 @@ public:
 
         /* Calculate sup(mu) */
 
-        double mu_max = 1;
-        for(int i=0;i<n1*n2;++i) mu_max = fmax(mu_max, mu_grid_[i]);
-
         cout << " Tolerance : " << tolerance_ << "\n";
 
         /* Initialize the constants */
 
         // double sigma_forth = sigma_;
         // double sigma_back  = sigma_;
-
-        double C_c_transform = 1;
-
-        {
-            string figurename = "mu";
-            plt.save_image_opencv(mu_grid_, figurename, 0);
-        }
-
-        {
-            string figurename = "nu";
-            plt.save_image_opencv(nu_grid_, figurename, 0);
-        }
         
         /* Starting the loop */
         
@@ -531,23 +461,15 @@ public:
 
             /* Determinant version pushforward */
             
-            error_mu = perform_OT_iteration_forth_det(sigma_forth_,W2_value_,mu,nu,iter);
-
-            // if(iter%skip==skip-1){
-            //     string figurename = "output";
-            //     plt.save_image_opencv(push_mu_ ,nu, figurename,(iter+1)/skip);
-            // }
-
-            error_nu = perform_OT_iteration_back_det (sigma_back_,W2_value_back_,mu,nu,iter);
+            error_mu = perform_OT_iteration_forth_det(sigma_forth_,W2_value_,dual_forth_,mu,nu,iter);
+            error_nu = perform_OT_iteration_back_det (sigma_back_,W2_value_back_,dual_back_,mu,nu,iter);
             
-            error=fmax(error_mu,error_nu);
-
+            // error=fmax(error_mu,error_nu);
 
             /* Stopping Condition */
 
             if(check_collides(push_mu_)){
-                // cout<<"iteration: " << iter << " dual: " << W2_value_ << "" << " Tolerance met!"<<"\n";
-                display_iteration(iter,W2_value_,W2_value_back_,error_mu,error_nu);
+                display_iteration(iter,W2_value_,W2_value_back_,dual_forth_,dual_back_,error_mu,error_nu);
                 printf("Tolerance Met!\n");
                 break;
             }
@@ -555,7 +477,7 @@ public:
             /* Display the result per iterations */
 
             if(iter%skip==skip-1){
-                display_iteration(iter,W2_value_,W2_value_back_,error_mu,error_nu);
+                display_iteration(iter,W2_value_,W2_value_back_,dual_forth_,dual_back_,error_mu,error_nu);
                 cout << flush;
 
                 // for(int p=0;p<nu->num_points_;++p){

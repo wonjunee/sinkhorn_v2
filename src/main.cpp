@@ -44,23 +44,48 @@ int main(int argc, char** argv){
     create_csv_parameters(n1,n2);
 
     /* Initialize mu and nu */
-    int n_mu = 3;
-    int n_nu = 3;
+    int n_mu = 100;
+    int n_nu = 100;
+
+    srand(1);
 
     Points* mu = new Points(DIM, n_mu);
     Points* nu = new Points(DIM, n_nu);
 
-    for(int p=0;p<mu->num_points_;++p){
-        (*mu)(p,0) = 0.9*rand()/RAND_MAX + 0.05;
-        (*mu)(p,1) = 0.9*rand()/RAND_MAX + 0.05;
+    for(int p=0;p<n_mu;++p){
+        (*mu)(p,0) = 0.2 * (1.0*rand()/RAND_MAX-0.5) + 0.5;
+        (*mu)(p,1) = 0.9 * (1.0*rand()/RAND_MAX-0.5) + 0.5;
     }
 
-    for(int p=0;p<nu->num_points_;++p){
-        (*nu)(p,0) = 0.9*rand()/RAND_MAX + 0.05;
-        (*nu)(p,1) = 0.9*rand()/RAND_MAX + 0.05;
+    // for(int p=0;p<n_nu/4;++p){
+    //     (*nu)(p,0) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.5;
+    //     (*nu)(p,1) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.8;
+    // }
+
+    // for(int p=n_nu/4;p<2*n_nu/4;++p){
+    //     (*nu)(p,0) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.8;
+    //     (*nu)(p,1) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.5;
+    // }
+
+    // for(int p=2*n_nu/4;p<3*n_nu/4;++p){
+    //     (*nu)(p,0) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.5;
+    //     (*nu)(p,1) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.2;
+    // }
+
+    // for(int p=3*n_nu/4;p<4*n_nu/4;++p){
+    //     (*nu)(p,0) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.2;
+    //     (*nu)(p,1) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.5;
+    // }
+
+    for(int p=0;p<n_nu;++p){
+        double r = 0.2*1.0*rand()/RAND_MAX + 0.3;
+        double theta = 2.0*M_PI*rand()/RAND_MAX;
+
+        (*nu)(p,0) = r * cos(theta) + 0.5;
+        (*nu)(p,1) = r * sin(theta) + 0.5;
     }
 
-    if(true){
+    if(false){
         (*mu)(0,0) = 0.1;
         (*mu)(0,1) = 0.1;
 
@@ -71,13 +96,13 @@ int main(int argc, char** argv){
         (*mu)(2,1) = 0.5;
 
         (*nu)(0,0) = 0.7;
-        (*nu)(0,1) = 0.1;
+        (*nu)(0,1) = 0.2;
 
         (*nu)(1,0) = 0.7;
-        (*nu)(1,1) = 0.10000001;
+        (*nu)(1,1) = 0.3;
 
         (*nu)(2,0) = 0.7;
-        (*nu)(2,1) = 0.10001;
+        (*nu)(2,1) = 0.1;
     }
 
     double sigma_back = sigma;

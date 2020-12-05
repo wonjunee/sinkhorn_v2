@@ -90,7 +90,7 @@ public:
                     double px = 1.0*iter/max_iter*pushx + (1-1.0*iter/max_iter)*mux;
                     double py = 1.0*iter/max_iter*pushy + (1-1.0*iter/max_iter)*muy;
 
-                    if(pow(x-px,2) + pow(y-py,2) < pow(0.02,2)){
+                    if(pow(x-px,2) + pow(y-py,2) < pow(0.01,2)){
                         color[0] = 255;
                         color[1] = 0;
                         color[2] = 0;  
@@ -101,7 +101,7 @@ public:
                     double px = nu->get(p,0);
                     double py = nu->get(p,1);
 
-                    if(pow(x-px,2) + pow(y-py,2) < pow(0.01,2)){
+                    if(pow(x-px,2) + pow(y-py,2) < pow(0.005,2)){
                         color[0] = 0;
                         color[1] = 0;
                         color[2] = 255;  
@@ -136,7 +136,7 @@ public:
                     double px = A->get(p,0);
                     double py = A->get(p,1);
 
-                    if(pow(x-px,2) + pow(y-py,2) < pow(0.02,2)){
+                    if(pow(x-px,2) + pow(y-py,2) < pow(0.01,2)){
                         color[0] = 255;
                         color[1] = 0;
                         color[2] = 0;  
@@ -147,7 +147,7 @@ public:
                     double px = B->get(p,0);
                     double py = B->get(p,1);
 
-                    if(pow(x-px,2) + pow(y-py,2) < pow(0.01,2)){
+                    if(pow(x-px,2) + pow(y-py,2) < pow(0.005,2)){
                         color[0] = 0;
                         color[1] = 0;
                         color[2] = 255;  
