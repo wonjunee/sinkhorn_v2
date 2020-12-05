@@ -9,9 +9,6 @@
 #include <fftw3.h>
 #include <fstream>
 #include <vector>
-// #include "FLT_bf.h"
-#include "FLT.h"
-#include "PoissonSolver.h"
 #include "Accessory.h"
 #include "Plotting.h"
 
@@ -77,8 +74,6 @@ public:
     double epsilon_;
 
     poisson_solver* fftps_;
-    FLT2D*          flt2d_;
-
 
     BackAndForth(int n1, int n2, int n_mu, int n_nu, int max_iteration, double tolerance, double sigma){
 
@@ -212,7 +207,7 @@ public:
         }
     }
 
-    void compute_psi_c_transform(double* phi_g_, Points* push_nu_, int* push_nu_idx_, const double* psi_f_, Points* mu, Points* nu){
+    void compute_psi_c_transform(double* phi_g_, int* push_nu_idx_, const double* psi_f_, Points* mu, Points* nu){
         for(int i=0;i<n_nu;++i){
             double eval = C_mat_[i*n_mu+0] - psi_f_[0];
             double min_val = eval;
@@ -225,14 +220,12 @@ public:
                 }
             }
             phi_g_[i] = min_val;
-            (*push_nu_)(i,0) = (*mu)(min_idx,0);
-            (*push_nu_)(i,1) = (*mu)(min_idx,1);
 
             push_nu_idx_[i] = min_idx;
         }
     }
 
-    void compute_phi_c_transform(double* psi_f_, Points* push_mu_, int* push_mu_idx_, double* phi_g_, Points* mu, Points* nu){
+    void compute_phi_c_transform(double* psi_f_, int* push_mu_idx_, double* phi_g_, Points* mu, Points* nu){
         for(int j=0;j<n_mu;++j){
             double eval = C_mat_[0*n_mu+j] - phi_g_[0];
             double min_val = eval;
@@ -245,8 +238,6 @@ public:
                 }
             }
             psi_f_[j] = min_val;
-            (*push_mu_)(j,0) = (*nu)(min_idx,0);
-            (*push_mu_)(j,1) = (*nu)(min_idx,1);
 
             push_mu_idx_[j] = min_idx;
         }
@@ -316,18 +307,10 @@ public:
         return sum;
     }
 
-    double calculate_W2_value(Points* push_mu, Points* mu){
+    double calculate_W2_value(int* push_mu_idx_){
         double sum = 0;
         for(int j=0;j<n_mu;++j){
-            double px = (*push_mu)(j,0);
-            double py = (*push_mu)(j,1);
-
-            double mx = (*mu)(j,0);
-            double my = (*mu)(j,1);
-
-            double diffx = px - mx;
-            double diffy = py - my;
-            sum += 0.5 * (diffx*diffx + diffy*diffy);
+            sum += C_mat_[push_mu_idx_[j]*n_mu+j];
         }
         return sum;
     }
@@ -336,8 +319,8 @@ public:
         double W2_value_previous = 0;
         double error_nu = 0;
 
-        compute_phi_c_transform(psi_f_, push_mu_, push_mu_idx_, phi_g_, mu, nu);
-        compute_psi_c_transform(phi_g_, push_nu_, push_nu_idx_, psi_f_, mu, nu);
+        compute_phi_c_transform(psi_f_, push_mu_idx_, phi_g_, mu, nu);
+        compute_psi_c_transform(phi_g_, push_nu_idx_, psi_f_, mu, nu);
 
 
         for(int j=0;j<n_mu;++j){
@@ -351,11 +334,11 @@ public:
             psi_f_[j] += update_val;
         }
 
-        compute_psi_c_transform(phi_g_, push_nu_, push_nu_idx_, psi_f_, mu, nu);
-        compute_phi_c_transform(psi_f_, push_mu_, push_mu_idx_, phi_g_, mu, nu);
+        compute_psi_c_transform(phi_g_, push_nu_idx_, psi_f_, mu, nu);
+        compute_phi_c_transform(psi_f_, push_mu_idx_, phi_g_, mu, nu);
 
         dual_value = calculate_dual_value(phi_g_, psi_f_, mu, nu);
-        W2_value   = calculate_W2_value(push_mu_,mu);
+        W2_value   = calculate_W2_value(push_mu_idx_);
 
         // sigma = update_sigma(sigma, W2_value, W2_value_previous, error_nu_h);
 
@@ -367,8 +350,8 @@ public:
         double W2_value_previous = 0;
         double error_mu = 1;
 
-        compute_psi_c_transform(phi_g_, push_nu_, push_nu_idx_, psi_f_, mu, nu);
-        compute_phi_c_transform(psi_f_, push_mu_, push_mu_idx_, phi_g_, mu, nu);
+        compute_psi_c_transform(phi_g_, push_nu_idx_, psi_f_, mu, nu);
+        compute_phi_c_transform(psi_f_, push_mu_idx_, phi_g_, mu, nu);
 
 
         for(int i=0;i<n_nu;++i){
@@ -382,12 +365,12 @@ public:
             phi_g_[i] += update_val;
         }
 
-        compute_phi_c_transform(psi_f_, push_mu_, push_mu_idx_, phi_g_, mu, nu);
-        compute_psi_c_transform(phi_g_, push_nu_, push_nu_idx_, psi_f_, mu, nu);
+        compute_phi_c_transform(psi_f_, push_mu_idx_, phi_g_, mu, nu);
+        compute_psi_c_transform(phi_g_, push_nu_idx_, psi_f_, mu, nu);
         
 
         dual_value = calculate_dual_value(phi_g_, psi_f_, mu, nu);
-        W2_value   = calculate_W2_value(push_mu_,mu);
+        W2_value   = calculate_W2_value(push_mu_idx_);
 
         // sigma = update_sigma(sigma, W2_value, W2_value_previous, error_mu_h);
 
@@ -397,7 +380,6 @@ public:
 // display_iteration(iter,W2_value,error_mu,error_nu,solution_error,C_phi,C_psi);
 
     void display_iteration(const int iter,const double W2_value,const double W2_value_back,const double dual_forth,const double dual_back,const double error_mu,const double error_nu) const{
-        // printf("%*d c2: %*.2f %*.2f\tdual: %*f %*f\tL1 error: %*f %*f\n",5,iter+1, 8, phi_c2_, 8, psi_c2_, 8, W2_value, 8, W2_value_back, 8, error_mu, 8, error_nu);
         printf("iter: %5d    dual: %8.4f %8.4f    W2: %8.4f %8.4f\n", iter+1, dual_forth, dual_back, W2_value, W2_value_back);
     }
 
@@ -406,18 +388,14 @@ public:
         c2 = C_c_transform;
     }
 
-    bool check_collides(Points* push_mu_){
+    bool check_collides(int* push_mu_idx_){
         for(int j=0;j<n_mu;++j){
-            double x0 = (*push_mu_)(j,0);
-            double y0 = (*push_mu_)(j,1);
+            int j_idx = push_mu_idx_[j];
 
             for(int j1=j+1;j1<n_mu;++j1){
-                double x1 = (*push_mu_)(j1,0);
-                double y1 = (*push_mu_)(j1,1);
+                int j1_idx = push_mu_idx_[j1];
 
-                double eval = (x0 - x1)*(x0 - x1) + (y0 - y1)*(y0 - y1);
-
-                if(eval == 0){
+                if(j_idx == j1_idx){
                     return false;
                 }
             }
@@ -426,9 +404,6 @@ public:
     }
 
     void start_OT(Points* mu, Points* nu, Plotting& plt){
-
-        push_mu_ = new Points(mu->DIM(), mu->num_points());
-        push_nu_ = new Points(nu->DIM(), nu->num_points());
 
         Initialize_C_mat_(mu, nu);
 
@@ -468,7 +443,7 @@ public:
 
             /* Stopping Condition */
 
-            if(check_collides(push_mu_)){
+            if(check_collides(push_mu_idx_)){
                 display_iteration(iter,W2_value_,W2_value_back_,dual_forth_,dual_back_,error_mu,error_nu);
                 printf("Tolerance Met!\n");
                 break;
@@ -493,10 +468,10 @@ public:
     void create_interpolate_video(Points* mu, Points* nu, int nt, Plotting& plt){
         string figurename = "video";
 
-        plt.save_image_opencv(push_mu_, mu, nu, figurename,0, nt);
+        plt.save_image_opencv(push_mu_idx_, mu, nu, figurename,0, nt);
 
         for(int n=1;n<nt+1;++n){
-            plt.save_image_opencv(push_mu_, mu, nu, figurename, n, nt);
+            plt.save_image_opencv(push_mu_idx_, mu, nu, figurename, n, nt);
         }
     }
 

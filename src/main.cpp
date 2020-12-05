@@ -44,8 +44,8 @@ int main(int argc, char** argv){
     create_csv_parameters(n1,n2);
 
     /* Initialize mu and nu */
-    int n_mu = 100;
-    int n_nu = 100;
+    int n_mu = 3;
+    int n_nu = 3;
 
     srand(1);
 

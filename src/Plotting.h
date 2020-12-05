@@ -61,7 +61,7 @@ public:
         imwrite(filename_iter, img_color);  
     }
 
-    void save_image_opencv(Points* push_mu_, Points* mu, Points* nu, const string& filename, const int iter, const int max_iter){
+    void save_image_opencv(int* push_mu_idx_, Points* mu, Points* nu, const string& filename, const int iter, const int max_iter){
         string filename_iter = "./figures/" + filename;
         filename_iter = filename_iter + "-" + to_string(iter) + ".png";
 
@@ -84,8 +84,8 @@ public:
                     double mux = mu->get(p,0);
                     double muy = mu->get(p,1);
 
-                    double pushx = push_mu_->get(p,0);
-                    double pushy = push_mu_->get(p,1);
+                    double pushx = nu->get(push_mu_idx_[p],0);
+                    double pushy = nu->get(push_mu_idx_[p],1);
 
                     double px = 1.0*iter/max_iter*pushx + (1-1.0*iter/max_iter)*mux;
                     double py = 1.0*iter/max_iter*pushy + (1-1.0*iter/max_iter)*muy;
