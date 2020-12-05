@@ -44,8 +44,8 @@ int main(int argc, char** argv){
     create_csv_parameters(n1,n2);
 
     /* Initialize mu and nu */
-    int n_mu = 3;
-    int n_nu = 3;
+    int n_mu = 8;
+    int n_nu = 8;
 
     srand(1);
 
@@ -167,7 +167,7 @@ int main(int argc, char** argv){
     printf("%s", ctime(&my_time));
 
     /* Initialize BFM */
-    BackAndForth bf(n1,n2,n_mu,n_nu,max_iteration,tolerance,sigma);
+    BackAndForth bf(DIM, n_mu, n_nu, max_iteration, tolerance, sigma);
     bf.sigma_forth_ = sigma;
     bf.sigma_back_ = sigma_back;
 

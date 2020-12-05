@@ -10,18 +10,26 @@
 #include <fstream>
 #include <vector>
 #include "Accessory.h"
-#include "PoissonSolver.h"
 #include "Plotting.h"
 
 using namespace std;
 
 const double LARGE_VALUE = 999999;
 
+double dist2_points(PointND* p1, PointND* p2){
+    int DIM = (*p1).DIM_;
+    double dist = 0;
+
+    for(int p=0;p<DIM;++p){
+        double diff = (*p1)(p) - (*p2)(p);
+        dist += diff*diff;
+    }
+
+    return dist;
+}
+
 class BackAndForth{
 public:
-    int n1;
-    int n2;
-
     int n_mu;
     int n_nu;
 
@@ -74,17 +82,14 @@ public:
 
     double epsilon_;
 
-    BackAndForth(int n1, int n2, int n_mu, int n_nu, int max_iteration, double tolerance, double sigma){
+    BackAndForth(int DIM, int n_mu, int n_nu, int max_iteration, double tolerance, double sigma){
 
-        epsilon_ = 1e-8;
-
-        this->n1=n1;
-        this->n2=n2;
+        epsilon_ = 1e-12;
 
         this->n_mu=n_mu;
         this->n_nu=n_nu;
 
-        DIM_ = 2;
+        DIM_ = DIM;
         max_iteration_ =max_iteration;
         tolerance_     =tolerance;
         sigma_ = sigma;
@@ -121,7 +126,13 @@ public:
     ~BackAndForth(){
 
         printf("bfm deconstruction\n");
+
+        delete[] phi_g_;
+        delete[] psi_f_;
+
         delete[] C_mat_;
+        delete[] C_mu_;
+        delete[] C_nu_;
 
         printf("there\n");
 
@@ -159,38 +170,24 @@ public:
 
         for(int i=0;i<n_nu;++i){
             for(int j=0;j<n_mu;++j){
-                double mux = (*mu)(j,0);
-                double muy = (*mu)(j,1);
-                double nux = (*nu)(i,0);
-                double nuy = (*nu)(i,1);
-                double px  = mux - nux;
-                double py  = muy - nuy;
-                C_mat_[i*n_mu+j] = 0.5 * (px*px + py*py);
+                double dist2 = dist2_points((*mu)(j),(*nu)(i));
+                C_mat_[i*n_mu+j] = 0.5 * dist2;
+                
             }
         }
 
         for(int i=0;i<n_nu;++i){
-            double nux = (*nu)(i,0);
-            double nuy = (*nu)(i,1);
             for(int j=i;j<n_nu;++j){
-                double mux = (*nu)(j,0);
-                double muy = (*nu)(j,1);
-                double px  = mux - nux;
-                double py  = muy - nuy;
-                C_nu_[i*n_nu+j] = 0.5 * (px*px + py*py);
+                double dist2 = dist2_points((*nu)(j),(*nu)(i));
+                C_nu_[i*n_mu+j] = 0.5 * dist2;
                 C_nu_[j*n_nu+i] = C_nu_[i*n_nu+j];
             }
         }
 
         for(int i=0;i<n_mu;++i){
-            double nux = (*mu)(i,0);
-            double nuy = (*mu)(i,1);
             for(int j=i;j<n_mu;++j){
-                double mux = (*mu)(j,0);
-                double muy = (*mu)(j,1);
-                double px  = mux - nux;
-                double py  = muy - nuy;
-                C_mu_[i*n_mu+j] = 0.5 * (px*px + py*py);
+                double dist2 = dist2_points((*mu)(j),(*mu)(i));
+                C_mu_[i*n_mu+j] = 0.5 * dist2;
                 C_mu_[j*n_mu+i] = C_mu_[i*n_mu+j];
             }
         }
@@ -347,8 +344,6 @@ public:
 
         return error_mu;
     }
-
-// display_iteration(iter,W2_value,error_mu,error_nu,solution_error,C_phi,C_psi);
 
     void display_iteration(const int iter,const double W2_value,const double W2_value_back,const double dual_forth,const double dual_back,const double error_mu,const double error_nu) const{
         printf("iter: %5d    dual: %8.4f %8.4f    W2: %8.4f %8.4f\n", iter+1, dual_forth, dual_back, W2_value, W2_value_back);
