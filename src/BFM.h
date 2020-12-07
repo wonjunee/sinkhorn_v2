@@ -35,6 +35,8 @@ public:
 
     int DIM_;
 
+    double vol_unit_ball_;
+
     int max_iteration_;
     double tolerance_;
     double W2_value_;
@@ -84,7 +86,7 @@ public:
 
     BackAndForth(int DIM, int n_mu, int n_nu, int max_iteration, double tolerance, double sigma){
 
-        epsilon_ = 1e-12;
+        epsilon_ = 1e-5;
 
         this->n_mu=n_mu;
         this->n_nu=n_nu;
@@ -121,6 +123,23 @@ public:
 
         phi_c2_ = 200;
         psi_c2_ = 200;
+
+        vol_unit_ball_ = 1;
+
+        if(DIM_ > 2){
+            int k = DIM_/2;
+            if(DIM_ % 2 == 0){
+                for(int i=1;i<k+1;++i){
+                    vol_unit_ball_ *= M_PI/i;
+                }
+            }else{
+                vol_unit_ball_ = 2.0 / (2*k+1);
+                for(int i=2*k-1;i>0;i-=2){
+                    vol_unit_ball_ *= (2.0*M_PI)/i;
+                    cout << "\nvol_unit_ball_: " << vol_unit_ball_ << endl;                    
+                }
+            }
+        }
     }
 
     ~BackAndForth(){
@@ -143,6 +162,16 @@ public:
         delete[] push_nu_idx_;
 
         printf("bfm deconstruction done\n");
+    }
+
+    double calculate_inverse_lap(double eval){
+        if(DIM_ >= 2){
+            return - 1.0/(2.0*M_PI) * log(epsilon_ + eval);
+        }
+        epsilon_ = 0.05;
+        // return 1.0/(DIM_ * (DIM_-2) * vol_unit_ball_ * (exp(log(epsilon_ + eval) * (DIM_-2))+epsilon_));
+            
+        return 1.0/(DIM_ * (DIM_-2) * vol_unit_ball_) * 1.0/(pow(eval, DIM_ - 2) + epsilon_);
     }
 
     void Initialize_C_mat_(Points* mu, Points* nu){
@@ -168,6 +197,7 @@ public:
          *
         **/
 
+
         for(int i=0;i<n_nu;++i){
             for(int j=0;j<n_mu;++j){
                 double dist2 = dist2_points((*mu)(j),(*nu)(i));
@@ -176,27 +206,31 @@ public:
             }
         }
 
-        for(int i=0;i<n_nu;++i){
-            for(int j=i;j<n_nu;++j){
-                double dist2 = dist2_points((*nu)(j),(*nu)(i));
-                C_nu_[i*n_mu+j] = 0.5 * dist2;
-                C_nu_[j*n_nu+i] = C_nu_[i*n_nu+j];
-            }
-        }
-
         for(int i=0;i<n_mu;++i){
             for(int j=i;j<n_mu;++j){
                 double dist2 = dist2_points((*mu)(j),(*mu)(i));
-                C_mu_[i*n_mu+j] = 0.5 * dist2;
+                double eval = sqrt(dist2);
+                // C_mu_[i*n_mu+j] = - 1.0/(2.0*M_PI) * log(epsilon_ + eval);
+                C_mu_[i*n_mu+j] = calculate_inverse_lap(eval);
                 C_mu_[j*n_mu+i] = C_mu_[i*n_mu+j];
             }
         }
 
+        for(int i=0;i<n_nu;++i){
+            for(int j=i;j<n_nu;++j){
+                double dist2 = dist2_points((*nu)(j),(*nu)(i));
+                double eval = sqrt(dist2);
+                // C_nu_[i*n_nu+j] = - 1.0/(2.0*M_PI) * log(epsilon_ + eval);
+                C_nu_[i*n_nu+j] = calculate_inverse_lap(eval);
+                C_nu_[j*n_nu+i] = C_nu_[i*n_nu+j];
+            }
+        }
+
+        
         for(int j=0;j<n_mu;++j){
             double val = 0;
             for(int j1=0;j1<n_mu;++j1){
-                double eval = sqrt(C_mu_[j*n_mu+j1]*2);
-                val += - 1.0/(2.0*M_PI) * log(epsilon_ + eval);
+                val += C_mu_[j*n_mu+j1];
             }
             C_mu_sum_[j] = val;
         }
@@ -204,12 +238,13 @@ public:
         for(int i=0;i<n_nu;++i){
             double val = 0;
             for(int i1=0;i1<n_nu;++i1){
-                double eval = sqrt(C_nu_[i*n_nu+i1]*2);
-                val += - 1.0/(2.0*M_PI) * log(epsilon_ + eval);
+                val += C_nu_[i*n_nu+i1];
             }
             C_nu_sum_[i] = val;
         }
+
     }
+
 
     void compute_psi_c_transform(double* phi_g_, int* push_nu_idx_, const double* psi_f_, Points* mu, Points* nu){
         for(int i=0;i<n_nu;++i){
@@ -295,11 +330,11 @@ public:
 
             double update_val = sigma*C_mu_sum_[j];
 
+            double term2 = 0;
             for(int i=0;i<n_nu;++i){
-                double eval = sqrt(C_mu_[j*n_mu+push_nu_idx_[i]]*2);
-                update_val += sigma/(2.0*M_PI) * log(epsilon_ + eval);
+                term2 += C_mu_[j*n_mu+push_nu_idx_[i]];
             }
-            psi_f_[j] += update_val;
+            psi_f_[j] += update_val - sigma * term2;
         }
 
         compute_psi_c_transform(phi_g_, push_nu_idx_, psi_f_, mu, nu);
@@ -326,11 +361,11 @@ public:
 
             double update_val = sigma*C_nu_sum_[i];
 
+            double term2 = 0;
             for(int j=0;j<n_mu;++j){
-                double eval = sqrt(C_nu_[i*n_nu+push_mu_idx_[j]]*2);
-                update_val += sigma/(2.0*M_PI) * log(epsilon_ + eval);
+                term2 += C_nu_[i*n_nu+push_mu_idx_[j]];
             }
-            phi_g_[i] += update_val;
+            phi_g_[i] += update_val - sigma * term2;
         }
 
         compute_phi_c_transform(psi_f_, push_mu_idx_, phi_g_, mu, nu);
@@ -345,8 +380,8 @@ public:
         return error_mu;
     }
 
-    void display_iteration(const int iter,const double W2_value,const double W2_value_back,const double dual_forth,const double dual_back,const double error_mu,const double error_nu) const{
-        printf("iter: %5d    dual: %8.4f %8.4f    W2: %8.4f %8.4f\n", iter+1, dual_forth, dual_back, W2_value, W2_value_back);
+    void display_iteration(const int iter,const double W2_value,const double W2_value_back,const double dual_forth,const double dual_back,const double rel_error) const{
+        printf("iter: %5d    dual: %8.4f %8.4f    W2: %8.4f %8.4f    rel error: %8.4f\n", iter+1, dual_forth, dual_back, W2_value, W2_value_back, rel_error);
     }
 
     bool check_collides(int* push_mu_idx_){
@@ -380,6 +415,8 @@ public:
 
         // double sigma_forth = sigma_;
         // double sigma_back  = sigma_;
+
+        double previous_dual = 1;
         
         /* Starting the loop */
         
@@ -393,10 +430,13 @@ public:
             
             // error=fmax(error_mu,error_nu);
 
+            double rel_error = fabs((dual_forth_ - previous_dual) / previous_dual);
+            previous_dual =  dual_forth_;
+
             /* Stopping Condition */
 
-            if(check_collides(push_mu_idx_)){
-                display_iteration(iter,W2_value_,W2_value_back_,dual_forth_,dual_back_,error_mu,error_nu);
+            if(check_collides(push_mu_idx_) || rel_error < tolerance_){
+                display_iteration(iter,W2_value_,W2_value_back_,dual_forth_,dual_back_,rel_error);
                 printf("Tolerance Met!\n");
                 break;
             }
@@ -404,7 +444,7 @@ public:
             /* Display the result per iterations */
 
             if(iter%skip==skip-1){
-                display_iteration(iter,W2_value_,W2_value_back_,dual_forth_,dual_back_,error_mu,error_nu);
+                display_iteration(iter,W2_value_,W2_value_back_,dual_forth_,dual_back_,rel_error);
                 cout << flush;
 
                 // for(int p=0;p<nu->num_points_;++p){
@@ -414,6 +454,13 @@ public:
                 // Initialize_C_mat_(mu, nu);
                 
             }
+
+            // if(iter % 10 == 0){
+            //     printf("mu: ");
+            //     mu->print();
+            //     printf("nu: ");
+            //     nu->print();
+            // }
         }
     }
 

@@ -13,21 +13,26 @@
 
 using namespace std;
 
-const int DIM = 2;
-
 int main(int argc, char** argv){
-    if(argc!=7){
+    if(argc!=6){
         cout<<"Do the following:"<<"\n";
-        cout<< argv[0] << " [n1] [n2] [max_iteration] [tolerance] [sigma] [nt]"<<"\n";
+        cout<< argv[0] << " [DIM] [max_iteration] [tolerance] [sigma] [nt]"<<"\n";
         return 0;
     }
 
-    int n1=stoi(argv[1]);
-    int n2=stoi(argv[2]);
-    int max_iteration=stoi(argv[3]);
-    double tolerance=stod(argv[4]);
-    double sigma=stod(argv[5]);
-    int nt=stoi(argv[6]);
+    int DIM=stoi(argv[1]);
+    int max_iteration=stoi(argv[2]);
+    double tolerance=stod(argv[3]);
+    double sigma=stod(argv[4]);
+    int nt=stoi(argv[5]);
+
+    int n1=512;
+    int n2=512;
+
+    if(DIM < 2){
+        cout << "DIM needs to be greater or equal to 2\n";
+        return -1;
+    }
 
     
 
@@ -35,6 +40,7 @@ int main(int argc, char** argv){
 
     cout << "n1            : " << n1 <<"\n";
     cout << "n2            : " << n2 <<"\n";
+    cout << "DIM           : " << DIM <<"\n";
     cout << "Max Iteration : " << max_iteration <<"\n";
     cout << "tolerance     : " << tolerance <<"\n";
 
@@ -44,8 +50,8 @@ int main(int argc, char** argv){
     create_csv_parameters(n1,n2);
 
     /* Initialize mu and nu */
-    int n_mu = 8;
-    int n_nu = 8;
+    int n_mu = 100;
+    int n_nu = 100;
 
     srand(1);
 
@@ -53,8 +59,9 @@ int main(int argc, char** argv){
     Points* nu = new Points(DIM, n_nu);
 
     for(int p=0;p<n_mu;++p){
-        (*mu)(p,0) = 0.2 * (1.0*rand()/RAND_MAX-0.5) + 0.5;
-        (*mu)(p,1) = 0.9 * (1.0*rand()/RAND_MAX-0.5) + 0.5;
+        for(int i=0;i<DIM;++i){
+            (*mu)(p,i) = 0.2 * (1.0*rand()/RAND_MAX-0.5) + 0.5;    
+        }
     }
 
     // for(int p=0;p<n_nu/4;++p){
@@ -83,6 +90,9 @@ int main(int argc, char** argv){
 
         (*nu)(p,0) = r * cos(theta) + 0.5;
         (*nu)(p,1) = r * sin(theta) + 0.5;
+        for(int d=2;d<DIM;++d){
+            (*nu)(p,d) = 0.2 * (1.0*rand()/RAND_MAX-0.5) + 0.5;
+        }
     }
 
     if(false){

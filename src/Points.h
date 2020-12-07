@@ -121,6 +121,19 @@ public:
         return mu[p];
     }
 
+    void print() const{
+        for(int p=0;p<n_points_;++p){
+            printf("(");
+            for(int d=0;d<DIM_;++d){
+                printf("%8.4f", (*mu[p])(d));
+                if(d<DIM_-1){
+                    printf(", ");
+                }
+            }
+            printf(")\n");
+        }
+    }
+
 }; // Points
 
 #endif
