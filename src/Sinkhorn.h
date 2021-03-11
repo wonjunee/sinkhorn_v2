@@ -20,7 +20,6 @@ double dist2_points(double* p1, double* p2, int DIM){
     double dist = 0;
 
     for(int p=0;p<DIM;++p){
-        // double diff = (*p1)(p) - (*p2)(p);
         double diff = p1[p] - p2[p];
         dist += diff*diff;
     }
@@ -215,7 +214,7 @@ public:
 
         for(int i=0;i<n_nu;++i){
             for(int j=0;j<n_mu;++j){
-                double dist2 = dist2_points((*mu)(j),(*nu)(i),DIM_);
+                double dist2 = dist2_points(&(mu->data[j*DIM_]),&(nu->data[i*DIM_]),DIM_);
                 C_mat_[i*n_mu+j] = 0.5 * dist2;
             }
         }
