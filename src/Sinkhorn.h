@@ -41,8 +41,7 @@ public:
     double W2_value_;
     double W2_value_back_;
 
-    double dual_forth_;
-    double dual_back_;
+    double dual_value_;
 
     double sigma_; // Coefficients for trace theorem
     double C_tr1_;
@@ -266,73 +265,28 @@ public:
         return sum;
     }
 
-    double perform_sinkhorn_iteration(double& W2_value, double& dual_value, Points* mu, Points* nu, const int iter){
-        // double W2_value_previous = 0;
-        double error_mu = 1;
-
-        // for(int i=0;i<n_nu;++i){
-        //     double sum = 0;
-        //     for(int j=0;j<n_mu;++j){
-        //         sum += K_[i*n_mu+j];
-        //     }
-        //     u_[i] = psi_[i] / sum;
-        // }
-
-        // for(int i=0;i<n_nu;++i){
-        //     for(int j=0;j<n_mu;++j){
-        //         K_[i*n_mu+j] *= u_[i];
-        //     }
-        // }
-
-        // for(int j=0;j<n_mu;++j){
-        //     double sum = 0;
-        //     for(int i=0;i<n_nu;++i){
-        //         sum += K_[i*n_mu+j];
-        //     }
-        //     u_[j] = phi_[j] / sum;
-        // }
-
-        // for(int i=0;i<n_nu;++i){
-        //     for(int j=0;j<n_mu;++j){
-        //         K_[i*n_mu+j] *= u_[j];
-        //     }
-        // }
-
-        for(int i=0;i<n_nu;++i){
-            double eval = 0;
-            for(int j=0;j<n_mu;++j){
-                eval += K_[i*n_mu+j] * psi_[j];
-            }
-            phi_[i] = 1.0/eval;
-        }
-
+    double perform_sinkhorn_iteration(Points* mu, Points* nu, const int iter){
+        // update psi
         for(int j=0;j<n_mu;++j){
             double eval = 0;
-            for(int i=0;i<n_nu;++i){
-                eval += K_[i*n_mu+j] * phi_[i];
-            }
-            psi_[j] = 1.0/eval;
+            for(int i=0;i<n_nu;++i) eval += exp(-1.0/lambda_ * (C_mat_[i*n_mu+j] - phi_[i]));
+            psi_[j] = - lambda_ * log(eval);
         }
-        
+        // update phi
+        for(int i=0;i<n_nu;++i){
+            double eval = 0;
+            for(int j=0;j<n_mu;++j) eval += exp(-1.0/lambda_ * (C_mat_[i*n_mu+j] - psi_[j] - phi_[i]));
+            phi_[i] += lambda_ * ( - log(eval));
+        }
+        // calculate dual value
+        double dual_value = 0;
         for(int i=0;i<n_nu;++i){
             for(int j=0;j<n_mu;++j){
-                Pi_[i*n_mu+j] = phi_[i] * K_[i*n_mu+j] * psi_[j];
+                double eval = phi_[i] - C_mat_[i*n_mu+j] + psi_[j];
+                dual_value += C_mat_[i*n_mu+j] * exp(eval/lambda_);
             }
         }
-
-        dual_value = 0;
-
-        for(int i=0;i<n_nu;++i){
-            for(int j=0;j<n_mu;++j){
-                dual_value += C_mat_[i*n_mu+j] * Pi_[i*n_mu+j];
-            }
-        }
-
-        dual_value /= n_mu;
-
-        
-
-        return error_mu;
+        return dual_value / n_mu;
     }
 
     void display_iteration(const int iter,const double dual_forth,const double rel_error) const{
@@ -357,64 +311,31 @@ public:
         Initialize_C_mat_(mu, nu);
 
         const int skip = 1; // frequency of printout
-
-        double error_mu = 1.0;
-        double error_nu = 1.0;
-        // double error=1.0;
-
-        /* Calculate sup(mu) */
-
         cout << " Tolerance : " << tolerance_ << "\n";
 
         /* Initialize the constants */
-
         double previous_dual = 1;
         
         /* Starting the loop */
-        
         for(int iter = 0; iter < max_iteration_; ++iter){
-
-
             /* Determinant version pushforward */
-            
-            error_mu = perform_sinkhorn_iteration(W2_value_,dual_forth_,mu,nu,iter);
-            
-            // error=fmax(error_mu,error_nu);
+            dual_value_ = perform_sinkhorn_iteration(mu,nu,iter);
 
-            double rel_error = fabs((dual_forth_ - previous_dual) / previous_dual);
-            previous_dual =  dual_forth_;
+            double rel_error = fabs((dual_value_ - previous_dual) / previous_dual);
+            previous_dual =  dual_value_;
 
             /* Stopping Condition */
-
-            // rel_error = 1;
             if(rel_error < tolerance_){
-            // if(fabs(dual_back_-0.09) < tolerance_ || fabs(dual_forth_-0.09) < tolerance_){
-            // if(check_collides(push_mu_idx_)){
-                display_iteration(iter,dual_forth_,rel_error);
+                display_iteration(iter,dual_value_,rel_error);
                 printf("Tolerance Met!\n");
                 break;
             }
 
             /* Display the result per iterations */
-
             if(iter%skip==skip-1){
-                display_iteration(iter,dual_forth_,rel_error);
+                display_iteration(iter,dual_value_,rel_error);
                 cout << flush;
-
-                // for(int p=0;p<nu->num_points_;++p){
-                //     (*nu)(p,0) += 1e-2*(1.0*rand()/RAND_MAX-0.5);
-                //     (*nu)(p,1) += 1e-2*(1.0*rand()/RAND_MAX-0.5);
-                // }
-                // Initialize_C_mat_(mu, nu);
-                
             }
-
-            // if(iter % 10 == 0){
-            //     printf("mu: ");
-            //     mu->print();
-            //     printf("nu: ");
-            //     nu->print();
-            // }
         }
     }
 

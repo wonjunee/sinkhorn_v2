@@ -11,6 +11,7 @@ ifndef FILE
 	FILE = src/main.cpp
 endif
 
+# To run Debugging mode, `make "DEBUG=-DDEBUG"`
  
 CFLAGS     :=  -O3 -std=c++11 -I./src -Wall -g
 # FFTW library
@@ -20,7 +21,7 @@ OPENCVFLAG := `pkg-config --cflags --libs opencv4`
 # for parallelization
 # OPENMPFLAG := -Xclang -fopenmp -lomp
  
-COMPILE_COMMAND := $(CC) $(CFLAGS) $(FFTWFLAG) $(OPENCVFLAG) $(OPENMPFLAG)
+COMPILE_COMMAND := $(CC) $(CFLAGS) $(FFTWFLAG) $(OPENCVFLAG) $(OPENMPFLAG) $(DEBUG)
  
 OUTPUT := bfm
  

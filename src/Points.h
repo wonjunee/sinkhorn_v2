@@ -35,35 +35,53 @@ public:
         return n_points_;
     }
 
+#ifdef DEBUG
     double get(int p, int n) const{
         assert(n >= 0 && n < DIM_);
         assert(p >= 0 && p < n_points_);
-     
-        // return (*data[p])(n);
         return data[p*DIM_+n];
     }
+#else
+    double get(int p, int n) const{
+        return data[p*DIM_+n];
+    }
+#endif
     
-    double& operator()(int p, int n)
-    {
+#ifdef DEBUG
+    double& operator()(int p, int n){
         assert(n >= 0 && n < DIM_);
         assert(p >= 0 && p < n_points_);
-     
-        // return (*data[p])(n);
         return data[p*DIM_+n];
     }
+#else
+    double& operator()(int p, int n){
+        return data[p*DIM_+n];
+    }
+#endif
 
-    double* operator()(int p)
-    {
+#ifdef DEBUG
+    double* operator()(int p){
         assert(p >= 0 && p < n_points_);
         return &data[p*DIM_];
     }
+#else
+    double* operator()(int p){
+        return &data[p*DIM_];
+    }
+#endif
      
+#ifdef DEBUG
     double operator()(int p, int n) const
     {
         assert(n >= 0 && n < DIM_);
         assert(p >= 0 && p < n_points_);
         return data[p*DIM_+n];
     }
+#else
+    double operator()(int p, int n) const{
+        return data[p*DIM_+n];
+    }
+#endif
 
 }; // Points
 
