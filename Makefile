@@ -7,6 +7,10 @@ ifdef PHYSICELL_CPP
 	CC := $(PHYSICELL_CPP)
 endif
 
+ifndef FILE
+	FILE = src/main.cpp
+endif
+
  
 CFLAGS     :=  -O3 -std=c++11 -I./src -Wall -g
 # FFTW library
@@ -20,8 +24,8 @@ COMPILE_COMMAND := $(CC) $(CFLAGS) $(FFTWFLAG) $(OPENCVFLAG) $(OPENMPFLAG)
  
 OUTPUT := bfm
  
-all: src/main.cpp
-	$(COMPILE_COMMAND) -o $(OUTPUT) src/main.cpp
+all: 
+	$(COMPILE_COMMAND) -o $(OUTPUT) $(FILE)
 
 clean:
 	rm -f *.o $(OUTPUT).*

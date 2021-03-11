@@ -9,7 +9,7 @@
 #include "Accessory.h"
 #include "Plotting.h"
 #include "Points.h"
-#include "Sinkhorn.h"
+#include "BFM.h"
 
 using namespace std;
 
@@ -50,10 +50,25 @@ int main(int argc, char** argv){
     create_csv_parameters(n1,n2);
 
     /* Initialize mu and nu */
-    int n_mu = 200;
-    int n_nu = 200;
+    int n_mu = 100;
+    int n_nu = 100;
 
     srand(1);
+
+string filename = "time_check.dat";
+ofstream outfile;
+outfile.open(filename);
+
+int num_x = 5;
+int DIM_list[] = {25, 50, 100, 250, 500};
+for(int idx_DIM=0;idx_DIM<num_x;++idx_DIM){
+    DIM = DIM_list[idx_DIM];
+    for(int idx_multiple=0;idx_multiple<50;++idx_multiple){
+
+        if(idx_multiple != 0){
+            outfile << ",";
+        }
+
 
     Points* mu = new Points(DIM, n_mu);
     Points* nu = new Points(DIM, n_nu);
@@ -61,30 +76,18 @@ int main(int argc, char** argv){
     for(int p=0;p<n_mu;++p){
         for(int i=0;i<DIM;++i){
             // (*mu)(p,i) = 0.2 * (1.0*rand()/RAND_MAX-0.5) + 0.5;    
-            (*mu)(p,i) = 0.2 * (1.0*rand()/RAND_MAX-0.5) + 0.3;     
-            (*nu)(p,i) = 0.2 * (1.0*rand()/RAND_MAX-0.5) + 0.6;     
+            (*mu)(p,i) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.3;     
+            (*nu)(p,i) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.6;     
         }
     }
 
-    // for(int p=0;p<n_nu/4;++p){
-    //     (*nu)(p,0) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.5;
-    //     (*nu)(p,1) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.8;
-    // }
-
-    // for(int p=n_nu/4;p<2*n_nu/4;++p){
-    //     (*nu)(p,0) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.8;
-    //     (*nu)(p,1) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.5;
-    // }
-
-    // for(int p=2*n_nu/4;p<3*n_nu/4;++p){
-    //     (*nu)(p,0) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.5;
-    //     (*nu)(p,1) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.2;
-    // }
-
-    // for(int p=3*n_nu/4;p<4*n_nu/4;++p){
-    //     (*nu)(p,0) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.2;
-    //     (*nu)(p,1) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.5;
-    // }
+    for(int p=0;p<n_mu;++p){
+        for(int i=0;i<DIM;++i){
+            // (*mu)(p,i) = 0.2 * (1.0*rand()/RAND_MAX-0.5) + 0.5;    
+            (*mu)(p,i) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.3;     
+            (*nu)(p,i) = 0.3 * (1.0*rand()/RAND_MAX-0.5) + 0.6;     
+        }
+    }
 
     // for(int p=0;p<n_nu;++p){
     //     double r = 0.2*1.0*rand()/RAND_MAX + 0.3;
@@ -167,7 +170,7 @@ int main(int argc, char** argv){
         // sigma = 0.3*fmin(minval3, sigma);
     }    
 
-    cout << "XXX Starting Sinkhorn XXX" << "\n";
+    cout << "XXX Starting particle BFM XXX" << "\n";
 
     cout << "\n";
     // declaring argument of time() 
@@ -177,21 +180,36 @@ int main(int argc, char** argv){
     printf("%s", ctime(&my_time));
 
     /* Initialize BFM */
-    Sinkhorn bf(DIM, n_mu, n_nu, max_iteration, tolerance, sigma);
+    BackAndForth bf(DIM, n_mu, n_nu, max_iteration, tolerance, sigma);
+    bf.sigma_forth_ = sigma;
+    bf.sigma_back_  = sigma_back;
 
     string figurename = "barenblatt";
 
-    plt.save_image_opencv(mu,nu,figurename,0);
     clock_t time;
     time=clock();
 
     bf.start_OT(mu, nu, plt);
 
     time=clock()-time;
-    printf ("\nCPU time for particle BFM: %f seconds.\n\n",((float)time)/CLOCKS_PER_SEC);
+    double elapsed_time = ((float)time)/CLOCKS_PER_SEC;
+    printf ("\nCPU time for particle BFM: %f seconds.\n\n", elapsed_time);
+
+    outfile << elapsed_time;
+
+    // bf.create_interpolate_video(mu, nu, nt, plt);
+
+    delete mu;
+    delete nu;
+
 
     // TODO: interpolate video
+} outfile << "\n";}
 
-    bf.create_interpolate_video(mu, nu, nt, plt);
+cout << "Herere\n";
 
-}
+outfile.close();
+
+    
+
+} // end of main

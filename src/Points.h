@@ -44,7 +44,8 @@ class Points{
 public:
     int n_points_;
     int DIM_;
-    PointND** mu;
+    // PointND** mu;
+    double* mu;
     
     Points(){
         mu = NULL;
@@ -56,22 +57,25 @@ public:
         DIM_ = DIM;
 
         // initialize points
-        mu = new PointND*[n_points_];
-        for(int p=0;p<n_points_;++p){
-            mu[p] = new PointND(DIM_);
-        }
+        mu = new double[n_points_*DIM_]; // mu[point_idx * DIM_ + dimension_idx]
+        // mu = new PointND*[n_points_];
+        // for(int p=0;p<n_points_;++p){
+        //     mu[p] = new PointND(DIM_);
+        // }
     }
 
     ~Points(){
-        for(int p=0;p<n_points_;++p){
-            delete mu[p];
-        }
         delete[] mu;
+
+        // for(int p=0;p<n_points_;++p){
+        //     delete mu[p];
+        // }
+        // delete[] mu;
         mu = NULL;
     }
 
     int DIM() const{
-        return n_points_;
+        return DIM_;
     }
 
     int num_points() const{
@@ -82,28 +86,29 @@ public:
         assert(n >= 0 && n < DIM_);
         assert(p >= 0 && p < n_points_);
      
-        return (*mu[p])(n);
+        // return (*mu[p])(n);
+        return mu[p*DIM_+n];
     }
 
-    PointND* get(int p) const{
-        assert(p >= 0 && p < n_points_);
+    // PointND* get(int p) const{
+    //     assert(p >= 0 && p < n_points_);
      
-        return mu[p];
-    }
+    //     return mu[p];
+    // }
     
     double& operator()(int p, int n)
     {
         assert(n >= 0 && n < DIM_);
         assert(p >= 0 && p < n_points_);
      
-        return (*mu[p])(n);
+        // return (*mu[p])(n);
+        return mu[p*DIM_+n];
     }
 
-    PointND*& operator()(int p)
+    double* operator()(int p)
     {
         assert(p >= 0 && p < n_points_);
-     
-        return mu[p];
+        return &mu[p*DIM_];
     }
      
     double operator()(int p, int n) const
@@ -111,28 +116,16 @@ public:
         assert(n >= 0 && n < DIM_);
         assert(p >= 0 && p < n_points_);
      
-        return (*mu[p])(n);
+        // return (*mu[p])(n);
+        return mu[p*DIM_+n];
     }
 
-    PointND* operator()(int p) const
-    {
-        assert(p >= 0 && p < n_points_);
+    // PointND* operator()(int p) const
+    // {
+    //     assert(p >= 0 && p < n_points_);
      
-        return mu[p];
-    }
-
-    void print() const{
-        for(int p=0;p<n_points_;++p){
-            printf("(");
-            for(int d=0;d<DIM_;++d){
-                printf("%8.4f", (*mu[p])(d));
-                if(d<DIM_-1){
-                    printf(", ");
-                }
-            }
-            printf(")\n");
-        }
-    }
+    //     return mu[p];
+    // }
 
 }; // Points
 
