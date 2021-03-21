@@ -24,13 +24,14 @@ def plot_in_plot(filename, ax, label, color):
     print(filename)
     print(arr_mean)
 
+    l = len(xarr)
 
-    ax.plot(xarr, arr_mean, 'o-', c=color, label=label)
+    ax.plot(xarr, arr_mean[:l], 'o-', c=color, label=label)
     # plt.fill_between(xarr, arr_min, arr_max,
     #                  facecolor="orange", # The fill color
     #                  color='blue',       # The outline color
     #                  alpha=0.15)          # Transparency of the fill
-    ax.fill_between(xarr, arr_std_down, arr_std_up,
+    ax.fill_between(xarr, arr_std_down[:l], arr_std_up[:l],
                      facecolor="orange", # The fill color
                      color=color,       # The outline color
                      alpha=0.2)          # Transparency of the fill
@@ -39,42 +40,41 @@ def plot_in_plot(filename, ax, label, color):
 
 def calculate_theoretical_rate(N, val, xarr):
     # return np.array([val / np.power(N, -2.0/xarr[0]) * np.power(N, -2.0/n) for n in xarr])
-    k = 0
+    k = 1
     eps = 0.5
     xarr = np.array(xarr)
     print(xarr)
-    return np.exp(k/eps)/np.sqrt(N) * (1.0 + np.power(eps, -np.floor(xarr/2)) )
+    # return 0.008*np.exp(k/eps)/np.sqrt(N) * (0.0 + np.power(eps, -xarr/50) )
+    return 0.02/np.sqrt(N)*np.power(xarr,eps)
 
 fig, ax = plt.subplots(1,1,figsize=(10,5))
 
 xarr = range(5,51,5)
-xarr = [2**(n+3) for n in range(9)]
+xarr = [2**(n+3) for n in range(7)]
 
 N = 100
 val = plot_in_plot("error_N_{}.dat".format(N), ax, "N={}".format(N), 'r')
-xarr = xarr[:4]
 theoretical_rate = calculate_theoretical_rate(N, val, xarr)
-ax.plot(xarr, theoretical_rate, '--', label="theoretical rate N={}".format(N))
+s = "$O(d^{\\lambda}/\\sqrt{N})$"
+ax.plot(xarr, theoretical_rate, '--', label="{} N={}".format(s,N))
 
-# N = 400
-# val = plot_in_plot("error_N_{}.dat".format(N), ax, "N={}".format(N), 'g')
-# theoretical_rate = calculate_theoretical_rate(N, val, xarr)
-# ax.plot(xarr, theoretical_rate, '--', label="theoretical rate N={}".format(N))
+N = 400
+val = plot_in_plot("error_N_{}.dat".format(N), ax, "N={}".format(N), 'g')
+theoretical_rate = calculate_theoretical_rate(N, val, xarr)
+s = "$O(d^{\\lambda}/\\sqrt{N})$"
+ax.plot(xarr, theoretical_rate, '--', label="{} N={}".format(s,N))
 
-# N = 1000
-# val = plot_in_plot("error_N_{}.dat".format(N), ax, "N={}".format(N), 'b')
-# theoretical_rate = calculate_theoretical_rate(N, val, xarr)
-# ax.plot(xarr, theoretical_rate, '--', label="theoretical rate N={}".format(N))
+N = 1000
+val = plot_in_plot("error_N_{}.dat".format(N), ax, "N={}".format(N), 'b')
+theoretical_rate = calculate_theoretical_rate(N, val, xarr)
+s = "$O(d^{\\lambda}/\\sqrt{N})$"
+ax.plot(xarr, theoretical_rate, '--', label="{} N={}".format(s,N))
 
-# N = 5000
-# val = plot_in_plot("error_N_{}.dat".format(N), ax, "N={}".format(N), 'y')
-# theoretical_rate = calculate_theoretical_rate(N, val, xarr)
-# ax.plot(xarr, theoretical_rate, '--', label="theoretical rate N={}".format(N))
-
-# N = 500
-# val = plot_in_plot("error_N_{}.dat".format(N), ax, "N={}".format(N), 'b')
-# theoretical_rate = np.array([val / np.power(N, -2.0/xarr[0]) * np.power(N, -2.0/n) for n in xarr])
-# ax.plot(xarr, theoretical_rate, '--', label="theoretical rate N={}".format(N))
+N = 5000
+val = plot_in_plot("error_N_{}.dat".format(N), ax, "N={}".format(N), 'y')
+theoretical_rate = calculate_theoretical_rate(N, val, xarr)
+s = "$O(d^{\\lambda}/\\sqrt{N})$"
+ax.plot(xarr, theoretical_rate, '--', label="{} N={}".format(s,N))
 
 ax.set_xlabel("Dimension")
 ax.set_ylabel("Error")

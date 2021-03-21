@@ -30,31 +30,47 @@ def plot_in_plot(filename, ax, label, color):
     #                  facecolor="orange", # The fill color
     #                  color='blue',       # The outline color
     #                  alpha=0.15)          # Transparency of the fill
-    ax.fill_between(xarr, arr_min, arr_max,
+    ax.fill_between(xarr, arr_std_down, arr_std_up,
                      facecolor="orange", # The fill color
                      color=color,       # The outline color
                      alpha=0.2)          # Transparency of the fill
     return arr_mean[0]
 
+def calculate_theoretical_rate(DIM, xarr, val):
+    # return np.array([val / np.power(xarr[0], -2.0/DIM) * np.power(n, -2.0/DIM) for n in xarr])
+
+    k = 0
+    eps = 0.5
+    xarr = np.array(xarr)
+    return 0.01*np.exp(k/eps)/np.sqrt(xarr) * (1.0 + np.power(eps, -DIM/10) )
 
 fig, ax = plt.subplots(1,1,figsize=(10,5))
 
-xarr = range(100,1001,100)
+xarr = np.array([100*2**i for i in range(6)])
 
-DIM = 5
+
+DIM = 2
+s = "$O(1/\\sqrt{n})$"
 val = plot_in_plot("error_DIM_{}.dat".format(DIM), ax, "d={}".format(DIM), 'r')
-theoretical_rate = np.array([val / np.power(xarr[0], -2.0/DIM) * np.power(n, -2.0/DIM) for n in xarr])
-ax.plot(xarr, theoretical_rate, '--', label="theoretical rate d={}".format(DIM))
+theoretical_rate = calculate_theoretical_rate(DIM, xarr, val)
+ax.plot(xarr, theoretical_rate, '--', label="{} d={}".format(s, DIM))
 
-DIM = 10
-val = plot_in_plot("error_DIM_{}.dat".format(DIM), ax, "d={}".format(DIM), 'g')
-theoretical_rate = np.array([val / np.power(xarr[0], -2.0/DIM) * np.power(n, -2.0/DIM) for n in xarr])
-ax.plot(xarr, theoretical_rate, '--', label="theoretical rate d={}".format(DIM))
+# DIM = 8
+# val = plot_in_plot("error_DIM_{}.dat".format(DIM), ax, "d={}".format(DIM), 'r')
+# theoretical_rate = calculate_theoretical_rate(DIM, xarr, val)
+# s = "something"
+# ax.plot(xarr, theoretical_rate, '--', label="{} d={}".format(s, DIM))
 
-DIM = 20
+# DIM = 16
+# val = plot_in_plot("error_DIM_{}.dat".format(DIM), ax, "d={}".format(DIM), 'g')
+# theoretical_rate = calculate_theoretical_rate(DIM, xarr, val)
+# s = "something"
+# ax.plot(xarr, theoretical_rate, '--', label="{} d={}".format(s, DIM))
+
+DIM = 32
 val = plot_in_plot("error_DIM_{}.dat".format(DIM), ax, "d={}".format(DIM), 'b')
-theoretical_rate = np.array([val / np.power(xarr[0], -2.0/DIM) * np.power(n, -2.0/DIM) for n in xarr])
-ax.plot(xarr, theoretical_rate, '--', label="theoretical rate d={}".format(DIM))
+theoretical_rate = calculate_theoretical_rate(DIM, xarr, val)
+ax.plot(xarr, theoretical_rate, '--', label="{} d={}".format(s, DIM))
 
 ax.set_xlabel("N")
 ax.set_ylabel("Error")
@@ -63,6 +79,7 @@ ax.set_xticks(xarr)
 ax.set_xticklabels(xarr)
 # ax.set_yticks([10,1,0.1,0.01,0.001,0.0005])
 ax.grid()
+ax.set_xscale('log')
 ax.set_yscale('log')
 ax.legend()
 plt.tight_layout()
