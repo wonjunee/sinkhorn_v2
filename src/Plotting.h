@@ -40,6 +40,7 @@ public:
     }
 
     void save_image_opencv(const double* A, const string& filename, const int iter){
+        printf("Plotting - ");
         string filename_iter = "./figures/" + filename;
         filename_iter = filename_iter + "-" + to_string(iter) + ".png";
 
@@ -59,16 +60,13 @@ public:
         applyColorMap(img_in, img_color, COLORMAP_INFERNO);
 
         imwrite(filename_iter, img_color);  
+        printf("Done\n");
     }
 
     void save_image_opencv(int* push_mu_idx_, Points* mu, Points* nu, const string& filename, const int iter, const int max_iter){
+        printf("Plotting - ");
         string filename_iter = "./figures/" + filename;
         filename_iter = filename_iter + "-" + to_string(iter) + ".png";
-
-        // memcpy(img_in.data, ar, n1*n2*sizeof(unsigned char));
-        // applyColorMap(img_in, img_color, COLORMAP_INFERNO);
-
-
         img_color *= 0;
         
 
@@ -121,68 +119,13 @@ public:
             
         }
 
-        // for(int p=0;p<nu->num_points();++p){
-        //     double px = nu->get(p,0);
-        //     double py = nu->get(p,1);
-
-        //     if(pow(x-px,2) + pow(y-py,2) < pow(0.005,2)){
-        //         color[0] = 0;
-        //         color[1] = 0;
-        //         color[2] = 255;  
-        //     }
-        // }
-
-        // for(int i=0;i<n2;++i){
-        //     for(int j=0;j<n1;++j){
-
-        //         double x = (j+.5)/n1;
-        //         double y = (i+.5)/n2;
-
-        //         Vec3b & color = img_color.at<Vec3b>(i,j);
-
-        //         color[0] = 0;
-        //         color[1] = 0;
-        //         color[2] = 0;  
-
-        //         for(int p=0;p<mu->num_points();++p){
-        //             double mux = mu->get(p,0);
-        //             double muy = mu->get(p,1);
-
-        //             double pushx = nu->get(push_mu_idx_[p],0);
-        //             double pushy = nu->get(push_mu_idx_[p],1);
-
-        //             double px = 1.0*iter/max_iter*pushx + (1-1.0*iter/max_iter)*mux;
-        //             double py = 1.0*iter/max_iter*pushy + (1-1.0*iter/max_iter)*muy;
-
-        //             if(pow(x-px,2) + pow(y-py,2) < pow(0.01,2)){
-        //                 color[0] = 255;
-        //                 color[1] = 0;
-        //                 color[2] = 0;  
-        //             }
-        //         }
-
-        //         for(int p=0;p<nu->num_points();++p){
-        //             double px = nu->get(p,0);
-        //             double py = nu->get(p,1);
-
-        //             if(pow(x-px,2) + pow(y-py,2) < pow(0.005,2)){
-        //                 color[0] = 0;
-        //                 color[1] = 0;
-        //                 color[2] = 255;  
-        //             }
-        //         }
-        //     }
-        // }
-
         imwrite(filename_iter, img_color);
+        printf("Done\n");
     }
 
     void save_image_opencv(Points* A, Points* B, const string& filename, const int iter){
         string filename_iter = "./figures/" + filename;
         filename_iter = filename_iter + "-" + to_string(iter) + ".png";
-
-        // memcpy(img_in.data, ar, n1*n2*sizeof(unsigned char));
-        // applyColorMap(img_in, img_color, COLORMAP_INFERNO);
 
         for(int i=0;i<n2;++i){
             for(int j=0;j<n1;++j){
@@ -196,22 +139,22 @@ public:
                 color[1] = 0;
                 color[2] = 0;  
 
-                for(int p=0;p<A->num_points();++p){
+                for(int p=0;p<A->n_points_;++p){
                     double px = A->get(p,0);
                     double py = A->get(p,1);
 
-                    if(pow(x-px,2) + pow(y-py,2) < pow(0.01,2)){
+                    if(pow(x-px,2) + pow(y-py,2) < pow(0.003,2)){
                         color[0] = 255;
                         color[1] = 0;
                         color[2] = 0;  
                     }
                 }
 
-                for(int p=0;p<B->num_points();++p){
+                for(int p=0;p<B->n_points_;++p){
                     double px = B->get(p,0);
                     double py = B->get(p,1);
 
-                    if(pow(x-px,2) + pow(y-py,2) < pow(0.005,2)){
+                    if(pow(x-px,2) + pow(y-py,2) < pow(0.002,2)){
                         color[0] = 0;
                         color[1] = 0;
                         color[2] = 255;  

@@ -62,15 +62,9 @@ public:
     double* phi_;
     double* psi_;
 
-    Points*  push_mu_;
-    Points*  push_nu_;
-
     int* push_mu_idx_;
-    int* push_nu_idx_;
 
     double* C_mat_; // cost matrix
-    double* K_;
-    double* Pi_;
 
     double epsilon_;
 
@@ -96,12 +90,7 @@ public:
 
         C_mat_ = new double[n_mu * n_nu];
 
-        K_  = new double[n_mu * n_nu];
-
-        Pi_ = new double[n_mu * n_nu];
-
         push_mu_idx_ = new int[n_mu];
-        push_nu_idx_ = new int[n_nu];
 
         // set a constant for the trace theorem
         C_tr1_ = 1;
@@ -137,54 +126,10 @@ public:
 
         delete[] phi_;
         delete[] psi_;
-
-        delete[] C_mat_;
-
-        delete[] K_;
-
-        delete[] Pi_;
-        
+        delete[] C_mat_;        
         delete[] push_mu_idx_;
-        delete[] push_nu_idx_;
 
         printf("bfm deconstruction done\n");
-    }
-
-    double calculate_log(double eval){
-        return - 1.0/(4*M_PI) * log(epsilon_ + eval);
-    }
-
-    double calculate_log_cutoff(double eval){
-        double cutoff = 1e10;
-        if(eval == 0) return cutoff;
-        return fmin(cutoff, - 1.0/(4*M_PI) * log(eval));
-    }
-
-    double no_precondition(double eval){
-        if(eval == 0) return 1;
-        return 0;
-    }
-
-    double calculate_power(double eval){
-        epsilon_ = 0.05;
-        return 1.0/(DIM_ * (DIM_-2) * vol_unit_ball_) * 1.0/(pow(eval + 1.0, 0.5 * (DIM_ - 2)));
-    }
-
-    double calculate_guassian(double eval){
-        double sigma = 0.05;
-        // return 1.0/(pow(2.0*M_PI*sigma, DIM_/2)) * exp(-eval/pow(sigma,DIM_));
-        return 1.0/(2.0*M_PI*sigma) *  exp(-eval/pow(sigma,2));
-    }
-
-    // eval = |x - y|^2
-    double G_(double eval){
-
-        // return no_precondition(eval);
-        // return calcaulte_power(eval);
-        return calculate_log(eval);
-        // return calculate_log_cutoff(eval);
-        // return calculate_guassian(eval);
-
     }
 
     void Initialize_C_mat_(Points* mu, Points* nu){
@@ -215,13 +160,6 @@ public:
             for(int j=0;j<n_mu;++j){
                 double dist2 = dist2_points(&(mu->data[j*DIM_]),&(nu->data[i*DIM_]),DIM_);
                 C_mat_[i*n_mu+j] = 0.5 * dist2;
-            }
-        }
-
-        for(int i=0;i<n_mu;++i){
-            for(int j=0;j<n_mu;++j){
-                double eval = exp(- C_mat_[i*n_mu+j] / lambda_);
-                K_[i*n_mu+j] = eval;
             }
         }
     }
@@ -342,7 +280,7 @@ public:
     void create_interpolate_video(Points* mu, Points* nu, int nt, Plotting& plt){
         string figurename = "video";
 
-        plt.save_image_opencv(push_mu_idx_, mu, nu, figurename,0, nt);
+        plt.save_image_opencv(push_mu_idx_, mu, nu, figurename, 0, nt);
 
         for(int n=1;n<nt+1;++n){
             plt.save_image_opencv(push_mu_idx_, mu, nu, figurename, n, nt);
