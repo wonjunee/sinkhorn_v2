@@ -61,14 +61,18 @@ public:
 
     double* phi_;
     double* psi_;
+    double* rho_;
 
     int* push_mu_idx_;
 
     double* C_mat_; // cost matrix
+    double* G_mat_; // cost matrix
+
+    double* dual_value_list_;
 
     double epsilon_;
 
-    Sinkhorn(int DIM, int n_mu, int n_nu, int max_iteration, double tolerance, double lambda){
+    Sinkhorn(const int DIM, const int n_mu, const int n_nu, const int max_iteration, const double tolerance, const double lambda, const double sigma){
 
         epsilon_ = 1e-20;
 
@@ -76,19 +80,24 @@ public:
         this->n_nu=n_nu;
 
         DIM_ = DIM;
-        max_iteration_ =max_iteration;
-        tolerance_     =tolerance;
-        lambda_ = lambda;
+        max_iteration_ = max_iteration;
+        tolerance_     = tolerance;
+        lambda_        = lambda;
+        sigma_         = sigma;
 
         printf("n_mu : %d n_mu : %d DIM: %d\n", n_mu, n_nu, DIM_);
 
         phi_=new double[n_nu];
         psi_=new double[n_mu];
+        rho_=new double[n_mu]; // if n_mu != n_nu then I need to create two different rho_; or make rho_[fmax(n_mu,n_mu)]
+
+        dual_value_list_=new double[max_iteration_];
 
         for(int i=0;i<n_nu;++i) phi_[i] = 1;
         for(int j=0;j<n_mu;++j) psi_[j] = 1;
 
         C_mat_ = new double[n_mu * n_nu];
+        G_mat_ = new double[n_nu * n_nu];
 
         push_mu_idx_ = new int[n_mu];
 
@@ -104,7 +113,7 @@ public:
 
         vol_unit_ball_ = 1;
 
-        cout << "lamdba : " << lambda_ << endl;
+        cout << "lambda: " << lambda_ << " sigma: " << sigma_ << endl;
 
         // if(DIM_ > 2){
         //     int k = DIM_/2;
@@ -126,10 +135,42 @@ public:
 
         delete[] phi_;
         delete[] psi_;
+        delete[] rho_;
         delete[] C_mat_;        
+        delete[] G_mat_;
         delete[] push_mu_idx_;
+        delete[] dual_value_list_;
 
         printf("bfm deconstruction done\n");
+    }
+
+    double calculate_log(double eval){
+        return - 1.0/(4*M_PI) * log(1e-12 + eval);
+    }
+
+    double calculate_log_cutoff(double eval){
+        double cutoff = 10000;
+        if(eval == 0) return cutoff;
+        return fmin(cutoff, - 1.0/(4*M_PI) * log(eval));
+    }
+
+    double no_precondition(double eval){
+        if(eval == 0) return 1;
+        return 0;
+    }
+
+    double calculate_guassian(double eval){
+        double sigma = 0.5;
+        return exp(-eval/(sigma*sigma));
+    }
+
+    // eval = |x - y|^2
+    double G_(double eval){
+
+        // return no_precondition(eval);
+        // return calcaulte_power(eval);
+        return calculate_log(eval);
+        // return calculate_guassian(eval);
     }
 
     void Initialize_C_mat_(Points* mu, Points* nu){
@@ -162,6 +203,16 @@ public:
                 C_mat_[i*n_mu+j] = 0.5 * dist2;
             }
         }
+
+
+        for(int i=0;i<n_nu;++i){
+            for(int j=i;j<n_nu;++j){
+                double dist2 = dist2_points(&(nu->data[j*DIM_]),&(nu->data[i*DIM_]),DIM_);
+                G_mat_[i*n_nu+j] = G_(dist2);
+                G_mat_[j*n_nu+i] = G_mat_[i*n_nu+j];
+            }
+        }
+
     }
 
 
@@ -170,18 +221,12 @@ public:
     */
     double update_sigma(const double sigma, const double W2_value, const double W2_value_previous, const double error){
 
-        if(W2_value_previous-W2_value>-beta_1_*error){
-            return alpha_2_;
-        }else if(W2_value_previous-W2_value<-beta_2_*error){
-            return alpha_1_;
+        if(W2_value_previous-W2_value>-sigma*beta_1_*error){
+            return sigma*alpha_2_;
+        }else if(W2_value_previous-W2_value<-sigma*beta_2_*error){
+            return sigma*alpha_1_;
         }
-
-        if(W2_value - W2_value_previous < beta_1_*error){
-            return alpha_2_;
-        }else if(W2_value - W2_value_previous > beta_2_*error){
-            return alpha_1_;
-        }
-        return 1;
+        return sigma;
     }
 
     double calculate_dual_value(const double* phi_, const double* psi_, Points* mu, Points* nu){
@@ -203,32 +248,91 @@ public:
         return sum;
     }
 
-    double perform_sinkhorn_iteration(Points* mu, Points* nu, const int iter){
+    double calc_L(double eval){
+        return - log(1e-12+eval); // log (original)
+        // double sig = 0.01; return exp(-(eval*eval)/(sig*sig)); // log (original)
+        // return 1.0/(fabs(eval));
+    }
+    // modify psi_
+    void compute_psi(){
+        double eval = 0;
+
+        // compute psi
+        for(int j=0;j<n_mu;++j){
+            eval    = phi_[0] - C_mat_[0*n_mu+j];
+            for(int i=1;i<n_nu;++i){ eval = fmax(eval, phi_[i] - C_mat_[i*n_mu+j]); }
+            psi_[j] = eval;
+        }
         // update psi
         for(int j=0;j<n_mu;++j){
-            double eval = 0;
-            for(int i=0;i<n_nu;++i) eval += exp(-1.0/lambda_ * (C_mat_[i*n_mu+j] - phi_[i]));
-            psi_[j] = - lambda_ * log(eval);
+            eval = 0;
+            for(int i=0;i<n_nu;++i) eval += exp( - (C_mat_[i*n_mu+j] + psi_[j] - phi_[i])/ lambda_ );
+            psi_[j] = lambda_ * log(eval) + psi_[j];
         }
+    }
+    // modify phi_
+    void compute_phi_sinkhorn(){
+        double eval = 0;
         // update phi
         for(int i=0;i<n_nu;++i){
-            double eval = 0;
-            for(int j=0;j<n_mu;++j) eval += exp(-1.0/lambda_ * (C_mat_[i*n_mu+j] - psi_[j] - phi_[i]));
-            phi_[i] += lambda_ * ( - log(eval));
+            eval = 0;
+            for(int j=0;j<n_mu;++j) eval += exp( - (C_mat_[i*n_mu+j] + psi_[j] - phi_[i])/ lambda_ );
+            phi_[i] -= lambda_ * (calc_L(1) - calc_L(eval));
         }
+    }
+    // modify rho_
+    void compute_rho(){
+        // define rho
+        double eval = 0;
+        for(int i=0;i<n_nu;++i){
+            eval = 0;
+            for(int j=0;j<n_mu;++j) eval += exp(- (C_mat_[i*n_mu+j] + psi_[j] - phi_[i])/ lambda_ );
+            rho_[i] = eval;
+        }
+    }
+    // modify phi_ and return error
+    double compute_phi_inverse_lap(){
+        double error = 0;
+        double eval  = 0;
+        // inverse laplacian
+        for(int i=0;i<n_nu;++i){
+            eval = 0;
+            for(int j=0;j<n_nu;++j) eval += (1-rho_[j]) * G_mat_[i*n_nu+j];
+            phi_[i] += sigma_ * eval;
+            error += eval;
+        }
+        return error / n_nu;
+    }
+    // return dual value
+    double compute_dual_value() const{
         // calculate dual value
         double dual_value = 0;
         for(int i=0;i<n_nu;++i){
             for(int j=0;j<n_mu;++j){
-                double eval = phi_[i] - C_mat_[i*n_mu+j] + psi_[j];
+                double eval = phi_[i] - C_mat_[i*n_mu+j] - psi_[j];
                 dual_value += C_mat_[i*n_mu+j] * exp(eval/lambda_);
             }
         }
-        return dual_value / n_mu;
+        return dual_value/n_mu;
+    }
+    // original
+    double perform_sinkhorn_iteration(Points* mu, Points* nu, const int iter){
+        compute_psi();
+
+        /* --- uncomment this to run sinkhorn --- */
+        // compute_phi_sinkhorn(); // sinkhorn
+
+        /* --- uncomment this to run laplacian version --- */
+        double dual_value_previous = dual_value_; // update the previous dual value
+        compute_rho(); 
+        double error = compute_phi_inverse_lap(); // laplacian
+        dual_value_ = compute_dual_value();
+        sigma_ = update_sigma(sigma_, dual_value_, dual_value_previous, error);
+        return compute_dual_value();
     }
 
     void display_iteration(const int iter,const double dual_forth,const double rel_error) const{
-        printf("iter: %5d  dual: %8.4f  rel error: %8.4e\n", iter+1, dual_forth, rel_error);
+        printf("iter: %5d dual: %8.4f rel error: %8.4e sigma: %8.4e\n", iter+1, dual_forth, rel_error, sigma_);
     }
 
     bool check_collides(int* push_mu_idx_){
@@ -245,6 +349,11 @@ public:
     }
 
     void start_OT(Points* mu, Points* nu, Plotting& plt){
+
+        beta_1_ =0.21;
+        beta_2_ =0.8;
+        alpha_1_=1.01;
+        alpha_2_=0.9;
 
         Initialize_C_mat_(mu, nu);
 
@@ -274,6 +383,10 @@ public:
                 display_iteration(iter,dual_value_,rel_error);
                 cout << flush;
             }
+
+            dual_value_list_[iter] = dual_value_;
+
+            sigma_ = fmin(0.01,fmax(1e-5, sigma_));
         }
     }
 

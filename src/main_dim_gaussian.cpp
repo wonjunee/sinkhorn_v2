@@ -56,21 +56,21 @@ int main(int argc, char** argv){
     create_csv_parameters(n1,n2);
 
     /* Initialize mu and nu */
-    int n_mu = 5000;
-    int n_nu = 5000;
+    int n_mu = 900;
+    int n_nu = 900;
 
     srand(time(NULL));
 
-string filename = "error_N_5000.dat";
+string filename = "error_N_900.dat";
 ofstream outfile_error;
 outfile_error.open(filename);
 
-filename = "time_check_N_5000.dat";
+filename = "time_check_N_900.dat";
 ofstream outfile_time;
 outfile_time.open(filename);
 
-int num_x = 9; // number of items in DIM_list
-int DIM_list[] = {8, 16, 32, 64, 128, 256, 512, 1024, 2048}; // Dimensions list
+int num_x = 7; // number of items in DIM_list
+int DIM_list[] = {2, 4, 8, 16, 32, 64, 128}; // Dimensions list
 for(int idx_DIM=0;idx_DIM<num_x;++idx_DIM){
     DIM = DIM_list[idx_DIM];
     // run the simulation 50 times per dimension
@@ -85,7 +85,7 @@ for(int idx_DIM=0;idx_DIM<num_x;++idx_DIM){
     Points* nu = new Points(DIM, n_nu);
 
     double sigmaA = 0.05;
-    double sigmaB = 0.05;
+    double sigmaB = 0.1;
 
     double muA = 0.3;
     double muB = 0.7;

@@ -21,9 +21,9 @@ double calculate_actual_answer(int DIM, double muA, double muB, double sigmaA, d
 }
 
 int main(int argc, char** argv){
-    if(argc!=5){
+    if(argc!=6){
         cout<<"Do the following:"<<"\n";
-        cout<< argv[0] << " [DIM] [max_iteration] [tolerance] [lambda]"<<"\n";
+        cout<< argv[0] << " [DIM] [max_iteration] [tolerance] [lambda] [sigma]"<<"\n";
         return 0;
     }
 
@@ -31,6 +31,7 @@ int main(int argc, char** argv){
     int max_iteration=stoi(argv[2]);
     double tolerance=stod(argv[3]);
     double lambda=stod(argv[4]);
+    double sigma=stod(argv[5]);
 
     int n1=1024;
     int n2=1024;
@@ -56,27 +57,32 @@ int main(int argc, char** argv){
     create_csv_parameters(n1,n2);
 
     /* Initialize mu and nu */
-    int n_mu = 5000;
-    int n_nu = 5000;
+    int n_mu = 0;
+    int n_nu = 0;
 
     srand(time(NULL));
 
 DIM = 32;
-string filename = "error_DIM_32.dat";
+string filename = "data/gaussian_0.5_error_DIM_32.dat";
 ofstream outfile_error;
 outfile_error.open(filename);
 
-filename = "time_check_DIM_32.dat";
+filename = "data/gaussian_0.5_time_check_DIM_32.dat";
 ofstream outfile_time;
 outfile_time.open(filename);
 
-int num_x = 6; // number of items in N_list
-int N_list[] = {100, 200, 400, 800, 1600, 3200}; // Dimensions list
+int num_x = 5; // number of items in N_list
+int N_list[] = {100, 200, 400, 800, 1600}; // Dimensions list
+// double sigma_list[] = {0.01, 0.01, 0.01, 0.01, 0.005}; // log
+double sigma_list[] = {0.005, 0.005, 0.005, 0.005, 0.001}; // gaussian 0.05
+
+
 for(int idx_DIM=0;idx_DIM<num_x;++idx_DIM){
+    sigma = sigma_list[idx_DIM];
     n_mu = N_list[idx_DIM];
     n_nu = n_mu;
     // run the simulation 50 times per dimension
-    for(int idx_multiple=0;idx_multiple<100;++idx_multiple){
+    for(int idx_multiple=0;idx_multiple<40;++idx_multiple){
 
         if(idx_multiple != 0){
             outfile_error << ",";
@@ -124,7 +130,7 @@ for(int idx_DIM=0;idx_DIM<num_x;++idx_DIM){
 
     double actual_answer = calculate_actual_answer(DIM, muA, muB, sigmaA, sigmaB, lambda);
 
-    cout << "XXX Starting particle BFM XXX" << "\n";
+    cout << "XXX Starting particle BFM run: " << idx_multiple << " XXX" << "\n";
 
     cout << "\n";
     // declaring argument of time() 
@@ -134,7 +140,7 @@ for(int idx_DIM=0;idx_DIM<num_x;++idx_DIM){
     printf("%s", ctime(&my_time));
 
     /* Initialize BFM */
-    Sinkhorn bf(DIM, n_mu, n_nu, max_iteration, tolerance, lambda);
+    Sinkhorn bf(DIM, n_mu, n_nu, max_iteration, tolerance, lambda, sigma);
 
     string figurename = "barenblatt";
 
