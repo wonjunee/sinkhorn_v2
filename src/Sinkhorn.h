@@ -93,8 +93,8 @@ public:
 
         dual_value_list_=new double[max_iteration_];
 
-        for(int i=0;i<n_nu;++i) phi_[i] = 1;
-        for(int j=0;j<n_mu;++j) psi_[j] = 1;
+        for(int i=0;i<n_nu;++i) phi_[i] = 0;
+        for(int j=0;j<n_mu;++j) psi_[j] = 0;
 
         C_mat_ = new double[n_mu * n_nu];
         G_mat_ = new double[n_nu * n_nu];
@@ -114,21 +114,6 @@ public:
         vol_unit_ball_ = 1;
 
         cout << "lambda: " << lambda_ << " sigma: " << sigma_ << endl;
-
-        // if(DIM_ > 2){
-        //     int k = DIM_/2;
-        //     if(DIM_ % 2 == 0){
-        //         for(int i=1;i<k+1;++i){
-        //             vol_unit_ball_ *= M_PI/i;
-        //         }
-        //     }else{
-        //         vol_unit_ball_ = 2.0 / (2*k+1);
-        //         for(int i=2*k-1;i>0;i-=2){
-        //             vol_unit_ball_ *= (2.0*M_PI)/i;
-        //             cout << "\nvol_unit_ball_: " << vol_unit_ball_ << endl;                    
-        //         }
-        //     }
-        // }
     }
 
     ~Sinkhorn(){
@@ -277,7 +262,7 @@ public:
         for(int i=0;i<n_nu;++i){
             eval = 0;
             for(int j=0;j<n_mu;++j) eval += exp( - (C_mat_[i*n_mu+j] + psi_[j] - phi_[i])/ lambda_ );
-            phi_[i] -= lambda_ * (calc_L(1) - calc_L(eval));
+            phi_[i] -= sigma_ * (calc_L(1) - calc_L(eval));
         }
     }
     // modify rho_
@@ -305,14 +290,21 @@ public:
     }
     // return dual value
     double compute_dual_value() const{
-        // calculate dual value
+        // wrong way
+        // double dual_value = 0;
+        // for(int i=0;i<n_nu;++i){
+        //     for(int j=0;j<n_mu;++j){
+        //         double eval = phi_[i] - C_mat_[i*n_mu+j] - psi_[j];
+        //         dual_value += C_mat_[i*n_mu+j] * exp(eval/lambda_);
+        //     }
+        // }
+
+        // correct way
         double dual_value = 0;
         for(int i=0;i<n_nu;++i){
-            for(int j=0;j<n_mu;++j){
-                double eval = phi_[i] - C_mat_[i*n_mu+j] - psi_[j];
-                dual_value += C_mat_[i*n_mu+j] * exp(eval/lambda_);
-            }
+            dual_value += phi_[i] - psi_[i];
         }
+
         return dual_value/n_mu;
     }
     // original
@@ -320,15 +312,21 @@ public:
         compute_psi();
 
         /* --- uncomment this to run sinkhorn --- */
-        // compute_phi_sinkhorn(); // sinkhorn
+        
+        compute_phi_sinkhorn(); // sinkhorn
+        dual_value_ = compute_dual_value();
 
         /* --- uncomment this to run laplacian version --- */
-        double dual_value_previous = dual_value_; // update the previous dual value
-        compute_rho(); 
-        double error = compute_phi_inverse_lap(); // laplacian
-        dual_value_ = compute_dual_value();
-        sigma_ = update_sigma(sigma_, dual_value_, dual_value_previous, error);
-        return compute_dual_value();
+
+        // double dual_value_previous = dual_value_; // update the previous dual value
+        // compute_rho(); 
+        // double error = compute_phi_inverse_lap(); // laplacian
+        // dual_value_ = compute_dual_value();
+        // sigma_ = update_sigma(sigma_, dual_value_, dual_value_previous, error);
+
+        /* --- this is the end of the laplacian version --- */
+
+        return dual_value_;
     }
 
     void display_iteration(const int iter,const double dual_forth,const double rel_error) const{
