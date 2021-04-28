@@ -64,8 +64,8 @@ public:
 
     int* push_mu_idx_;
 
-    double* C_mat_; // cost matrix
-    double* G_mat_; // cost matrix
+    // double* C_mat_; // cost matrix
+    // double* G_mat_; // cost matrix
 
     double* dual_value_list_;
 
@@ -95,8 +95,8 @@ public:
         for(int i=0;i<n_nu;++i) phi_[i] = 0;
         for(int j=0;j<n_mu;++j) psi_[j] = 0;
 
-        C_mat_ = new double[n_mu * n_nu];
-        G_mat_ = new double[n_nu * n_nu];
+        // C_mat_ = new double[n_mu * n_nu];
+        // G_mat_ = new double[n_nu * n_nu];
 
         push_mu_idx_ = new int[n_mu];
 
@@ -120,8 +120,8 @@ public:
         delete[] phi_;
         delete[] psi_;
         delete[] rho_;
-        delete[] C_mat_;        
-        delete[] G_mat_;
+        // delete[] C_mat_;        
+        // delete[] G_mat_;
         delete[] push_mu_idx_;
         delete[] dual_value_list_;
 
@@ -157,7 +157,6 @@ public:
         // return calculate_guassian(eval);
     }
 
-    void Initialize_C_mat_(const double* pos_mu, const double* pos_nu){
         /** 
          *       Create a cost function 
          *
@@ -179,8 +178,8 @@ public:
          * C_nu_sum_i = \sum_{j=1}^{n_nu} (-\Delta)^{-1} \delta_{y_j} (y_i)
          *
         **/
-
-
+/*
+    void Initialize_C_mat_(const double* pos_mu, const double* pos_nu){
         for(int i=0;i<n_nu;++i){
             for(int j=0;j<n_mu;++j){
                 // double dist2 = dist2_points(&(mu->data[j*DIM_]),&(nu->data[i*DIM_]),DIM_);
@@ -199,6 +198,7 @@ public:
         }
 
     }
+*/
 
 
     /**
@@ -225,64 +225,79 @@ public:
         return sum/n_mu;
     }
 
-    double calculate_W2_value(int* push_mu_idx_){
-        double sum = 0;
-        for(int j=0;j<n_mu;++j){
-            sum += C_mat_[push_mu_idx_[j]*n_mu+j];
-        }
-        return sum;
-    }
-
     double calc_L(double eval){
         return - log(1e-12+eval); // log (original)
         // double sig = 0.01; return exp(-(eval*eval)/(sig*sig)); // log (original)
         // return 1.0/(fabs(eval));
     }
     // modify psi_
-    void compute_psi(){
+    void compute_psi(const double* pos_mu, const double* pos_nu){
         double eval = 0;
 
         // compute psi
         for(int j=0;j<n_mu;++j){
-            eval    = phi_[0] - C_mat_[0*n_mu+j];
-            for(int i=1;i<n_nu;++i){ eval = fmax(eval, phi_[i] - C_mat_[i*n_mu+j]); }
+            // eval    = phi_[0] - C_mat_[0*n_mu+j];
+            double dist2 = dist2_points(&pos_mu[j*DIM_],&pos_nu[0*DIM_],DIM_);
+            eval    = phi_[0] - dist2/2.0;
+            for(int i=1;i<n_nu;++i){ 
+                // eval = fmax(eval, phi_[i] - C_mat_[i*n_mu+j]); 
+                double dist2 = dist2_points(&pos_mu[j*DIM_],&pos_nu[i*DIM_],DIM_);
+                eval = fmax(eval, phi_[i] - dist2/2.0); 
+            }
             psi_[j] = eval;
         }
         // update psi
         for(int j=0;j<n_mu;++j){
             eval = 0;
-            for(int i=0;i<n_nu;++i) eval += exp( - (C_mat_[i*n_mu+j] + psi_[j] - phi_[i])/ lambda_ );
+            for(int i=0;i<n_nu;++i){
+                double dist2 = dist2_points(&pos_mu[j*DIM_],&pos_nu[i*DIM_],DIM_);
+                // eval += exp( - (C_mat_[i*n_mu+j] + psi_[j] - phi_[i])/ lambda_ );
+                eval += exp( - (dist2/2.0 + psi_[j] - phi_[i])/ lambda_ );
+            }
             psi_[j] = lambda_ * log(eval) + psi_[j];
         }
     }
     // modify phi_
-    void compute_phi_sinkhorn(){
+    void compute_phi_sinkhorn(const double* pos_mu, const double* pos_nu){
         double eval = 0;
         // update phi
         for(int i=0;i<n_nu;++i){
             eval = 0;
-            for(int j=0;j<n_mu;++j) eval += exp( - (C_mat_[i*n_mu+j] + psi_[j] - phi_[i])/ lambda_ );
+            for(int j=0;j<n_mu;++j){
+                double dist2 = dist2_points(&pos_mu[j*DIM_],&pos_nu[i*DIM_],DIM_);
+                // eval += exp( - (C_mat_[i*n_mu+j] + psi_[j] - phi_[i])/ lambda_ );
+                eval += exp( - (dist2/2.0 + psi_[j] - phi_[i])/ lambda_ );
+
+            } 
             phi_[i] -= sigma_ * (calc_L(1) - calc_L(eval));
         }
     }
     // modify rho_
-    void compute_rho(){
+    void compute_rho(const double* pos_mu, const double* pos_nu){
         // define rho
         double eval = 0;
         for(int i=0;i<n_nu;++i){
             eval = 0;
-            for(int j=0;j<n_mu;++j) eval += exp(- (C_mat_[i*n_mu+j] + psi_[j] - phi_[i])/ lambda_ );
+            for(int j=0;j<n_mu;++j) {
+                double dist2 = dist2_points(&pos_mu[j*DIM_],&pos_nu[i*DIM_],DIM_);
+                // eval += exp(- (C_mat_[i*n_mu+j] + psi_[j] - phi_[i])/ lambda_ );
+                eval += exp(- (dist2/2.0 + psi_[j] - phi_[i])/ lambda_ );
+            }
             rho_[i] = eval;
         }
     }
     // modify phi_ and return error
-    double compute_phi_inverse_lap(){
+    double compute_phi_inverse_lap(const double* pos_mu, const double* pos_nu){
         double error = 0;
         double eval  = 0;
         // inverse laplacian
         for(int i=0;i<n_nu;++i){
             eval = 0;
-            for(int j=0;j<n_nu;++j) eval += (1-rho_[j]) * G_mat_[i*n_nu+j];
+            for(int j=0;j<n_nu;++j) {
+                double dist2 = dist2_points(&pos_nu[j*DIM_],&pos_nu[i*DIM_],DIM_);
+                // eval += (1-rho_[j]) * G_mat_[i*n_nu+j];
+                eval += (1-rho_[j]) * G_(dist2);
+            }
             phi_[i] += sigma_ * eval;
             error += eval;
         }
@@ -290,20 +305,20 @@ public:
     }
     // original
     double perform_sinkhorn_iteration(const double* mu, const double* pos_mu, const double* nu, const double* pos_nu, const int iter){
-        compute_psi();
+        compute_psi(pos_mu, pos_nu);
 
         /* --- uncomment this to run sinkhorn --- */
         
-        compute_phi_sinkhorn(); // sinkhorn
-        dual_value_ = calculate_dual_value(phi_, psi_, mu, nu);
+        // compute_phi_sinkhorn(pos_mu,pos_nu); // sinkhorn
+        // dual_value_ = calculate_dual_value(phi_, psi_, mu, nu);
 
         /* --- uncomment this to run laplacian version --- */
 
-        // double dual_value_previous = dual_value_; // update the previous dual value
-        // compute_rho(); 
-        // double error = compute_phi_inverse_lap(); // laplacian
-        // dual_value_ = compute_dual_value();
-        // sigma_ = update_sigma(sigma_, dual_value_, dual_value_previous, error);
+        double dual_value_previous = dual_value_; // update the previous dual value
+        compute_rho(pos_mu,pos_nu); 
+        double error = compute_phi_inverse_lap(pos_mu,pos_nu); // laplacian
+        dual_value_ = calculate_dual_value(phi_, psi_, mu, nu);
+        sigma_ = update_sigma(sigma_, dual_value_, dual_value_previous, error);
 
         /* --- this is the end of the laplacian version --- */
 
@@ -334,7 +349,7 @@ public:
         alpha_1_=1.01;
         alpha_2_=0.9;
 
-        Initialize_C_mat_(pos_mu, pos_nu);
+        // Initialize_C_mat_(pos_mu, pos_nu);
 
         const int skip = 100; // frequency of printout
         cout << " Tolerance : " << tolerance_ << "\n";

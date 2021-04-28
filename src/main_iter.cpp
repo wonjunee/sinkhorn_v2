@@ -19,9 +19,9 @@ double calculate_actual_answer(int DIM, double muA, double muB, double sigmaA, d
 }
 
 int main(int argc, char** argv){
-    if(argc!=6){
+    if(argc!=7){
         cout<<"Do the following:"<<"\n";
-        cout<< argv[0] << " [DIM] [max_iteration] [tolerance] [lambda] [sigma]"<<"\n";
+        cout<< argv[0] << " [DIM] [max_iteration] [tolerance] [lambda] [sigma] [filename]"<<"\n";
         return 0;
     }
 
@@ -30,14 +30,15 @@ int main(int argc, char** argv){
     double tolerance=stod(argv[3]);
     double lambda=stod(argv[4]);
     double sigma=stod(argv[5]);
+    string filename = argv[6];
 
     if(DIM < 2){
         cout << "DIM needs to be greater or equal to 2\n";
         return -1;
     }
 
-    int n1=64;
-    int n2=64;
+    int n1=30;
+    int n2=30;
 
     string data_folder = "data";
 
@@ -55,12 +56,12 @@ int main(int argc, char** argv){
 
     srand(time(NULL));
 
-    DIM   = 2;
+    DIM   = 20;
 
     n_mu  = n1*n2;
     n_nu  = n1*n2;
 
-    string filename = "data/original_error_DIM_8.dat";
+    // string filename = "data/original_error_DIM_8.dat";
     ofstream outfile;
     outfile.open(filename);
 
@@ -90,7 +91,34 @@ int main(int argc, char** argv){
         }
     }
 
-    
+        
+    for(int i=0;i<n_mu;++i){
+        mu[i] = 1;
+        nu[i] = 1;
+    }
+        { // define mu
+            std::random_device rd;
+            std::default_random_engine generator;
+            generator.seed( rd() );
+            std::normal_distribution<double> distribution(muA,sigmaA);
+            for(int p=0;p<n_mu;++p){
+                for(int i=0;i<DIM;++i){
+                    pos_mu[p*DIM+i] = distribution(generator);
+                }
+            }
+        }
+
+        { // define nu
+            std::random_device rd;
+            std::default_random_engine generator;
+            generator.seed( rd() );
+            std::normal_distribution<double> distribution(muB,sigmaB);
+            for(int p=0;p<n_mu;++p){
+                for(int i=0;i<DIM;++i){
+                    pos_nu[p*DIM+i] = distribution(generator);
+                }
+            }
+        }
 
     double actual_answer = calculate_actual_answer(DIM, muA, muB, sigmaA, sigmaB, lambda);
 
