@@ -23,7 +23,7 @@ OPENCVFLAG := `pkg-config --cflags --libs opencv4`
  
 COMPILE_COMMAND := $(CC) $(CFLAGS) $(FFTWFLAG) $(OPENCVFLAG) $(OPENMPFLAG) $(DEBUG)
  
-OUTPUT := bfm
+OUTPUT := sinkhorn
  
 all: 
 	$(COMPILE_COMMAND) -o $(OUTPUT) $(FILE)

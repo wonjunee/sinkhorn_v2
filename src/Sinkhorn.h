@@ -10,13 +10,12 @@
 #include <fstream>
 #include <vector>
 #include "Accessory.h"
-#include "Plotting.h"
 
 using namespace std;
 
 const double LARGE_VALUE = 999999;
 
-double dist2_points(double* p1, double* p2, int DIM){
+double dist2_points(const double* p1, const double* p2, int DIM){
     double dist = 0;
 
     for(int p=0;p<DIM;++p){
@@ -158,7 +157,7 @@ public:
         // return calculate_guassian(eval);
     }
 
-    void Initialize_C_mat_(Points* mu, Points* nu){
+    void Initialize_C_mat_(const double* pos_mu, const double* pos_nu){
         /** 
          *       Create a cost function 
          *
@@ -184,7 +183,8 @@ public:
 
         for(int i=0;i<n_nu;++i){
             for(int j=0;j<n_mu;++j){
-                double dist2 = dist2_points(&(mu->data[j*DIM_]),&(nu->data[i*DIM_]),DIM_);
+                // double dist2 = dist2_points(&(mu->data[j*DIM_]),&(nu->data[i*DIM_]),DIM_);
+                double dist2 = dist2_points(&pos_mu[j*DIM_],&pos_nu[i*DIM_],DIM_);
                 C_mat_[i*n_mu+j] = 0.5 * dist2;
             }
         }
@@ -192,7 +192,7 @@ public:
 
         for(int i=0;i<n_nu;++i){
             for(int j=i;j<n_nu;++j){
-                double dist2 = dist2_points(&(nu->data[j*DIM_]),&(nu->data[i*DIM_]),DIM_);
+                double dist2 = dist2_points(&pos_nu[j*DIM_],&pos_nu[i*DIM_],DIM_);
                 G_mat_[i*n_nu+j] = G_(dist2);
                 G_mat_[j*n_nu+i] = G_mat_[i*n_nu+j];
             }
@@ -214,13 +214,13 @@ public:
         return sigma;
     }
 
-    double calculate_dual_value(const double* phi_, const double* psi_, Points* mu, Points* nu){
+    double calculate_dual_value(const double* phi_, const double* psi_, const double* mu, const double* nu) const{
         double sum = 0;
         for(int i=0;i<n_nu;++i){
-            sum += phi_[i];
+            sum += phi_[i] * nu[i];
         }
         for(int j=0;j<n_mu;++j){
-            sum += psi_[j];
+            sum -= psi_[j] * mu[j];
         }
         return sum/n_mu;
     }
@@ -288,33 +288,14 @@ public:
         }
         return error / n_nu;
     }
-    // return dual value
-    double compute_dual_value() const{
-        // wrong way
-        // double dual_value = 0;
-        // for(int i=0;i<n_nu;++i){
-        //     for(int j=0;j<n_mu;++j){
-        //         double eval = phi_[i] - C_mat_[i*n_mu+j] - psi_[j];
-        //         dual_value += C_mat_[i*n_mu+j] * exp(eval/lambda_);
-        //     }
-        // }
-
-        // correct way
-        double dual_value = 0;
-        for(int i=0;i<n_nu;++i){
-            dual_value += phi_[i] - psi_[i];
-        }
-
-        return dual_value/n_mu;
-    }
     // original
-    double perform_sinkhorn_iteration(Points* mu, Points* nu, const int iter){
+    double perform_sinkhorn_iteration(const double* mu, const double* pos_mu, const double* nu, const double* pos_nu, const int iter){
         compute_psi();
 
         /* --- uncomment this to run sinkhorn --- */
         
         compute_phi_sinkhorn(); // sinkhorn
-        dual_value_ = compute_dual_value();
+        dual_value_ = calculate_dual_value(phi_, psi_, mu, nu);
 
         /* --- uncomment this to run laplacian version --- */
 
@@ -346,16 +327,16 @@ public:
         return true;
     }
 
-    void start_OT(Points* mu, Points* nu, Plotting& plt){
+    void start_OT(const double* mu, const double* pos_mu, const double* nu, const double* pos_nu){
 
         beta_1_ =0.21;
         beta_2_ =0.8;
         alpha_1_=1.01;
         alpha_2_=0.9;
 
-        Initialize_C_mat_(mu, nu);
+        Initialize_C_mat_(pos_mu, pos_nu);
 
-        const int skip = 1; // frequency of printout
+        const int skip = 100; // frequency of printout
         cout << " Tolerance : " << tolerance_ << "\n";
 
         /* Initialize the constants */
@@ -364,7 +345,7 @@ public:
         /* Starting the loop */
         for(int iter = 0; iter < max_iteration_; ++iter){
             /* Determinant version pushforward */
-            dual_value_ = perform_sinkhorn_iteration(mu,nu,iter);
+            dual_value_ = perform_sinkhorn_iteration(mu,pos_mu,nu,pos_nu,iter);
 
             double rel_error = fabs((dual_value_ - previous_dual) / previous_dual);
             previous_dual =  dual_value_;
@@ -387,17 +368,6 @@ public:
             sigma_ = fmin(0.01,fmax(1e-5, sigma_));
         }
     }
-
-    void create_interpolate_video(Points* mu, Points* nu, int nt, Plotting& plt){
-        string figurename = "video";
-
-        plt.save_image_opencv(push_mu_idx_, mu, nu, figurename, 0, nt);
-
-        for(int n=1;n<nt+1;++n){
-            plt.save_image_opencv(push_mu_idx_, mu, nu, figurename, n, nt);
-        }
-    }
-
 
 }; // Back and Forth
 
